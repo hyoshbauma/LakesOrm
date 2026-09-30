@@ -151,7 +151,9 @@ bun run lakes migrate -d
 
 ```
 
-## Some codes
+## Some Migration codes ()
+
+Some code are auto-generatated for you in the migration file, you have to add only the column like :  
 
 This just a example of migration (part of it actualy)
 
@@ -169,5 +171,27 @@ This just a example of migration (part of it actualy)
             .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
             .save();
     }
+
+
 ```
+
+Example of  Generated Column
+
+```typescript
+
+// Run your schema changes here
+  public async up(): Promise<Orader | null> {
+          
+    return new OraderTable().createTable()
+      .addColumn('id', 'SERIAL', { primaryKey: true })
+      .addColumn('quanty', 'INT', {nullable: false})
+      .addColumn('price', 'INT', {nullable: false})
+      .addGeneratedColumn('total', 'INT', ['quanty','price'], 'quanty * price')
+      .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
+      .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
+      .save();
+  }
+
+```
+
 
