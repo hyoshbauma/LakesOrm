@@ -24,6 +24,10 @@ export interface ColumnType {
   unique: boolean;
   defaultValue?: string | number ;
   references?: foreignKey;
+  isGenerated?: {
+    dependsOn : string[],
+    expression : string
+  }
 }
 
 export interface IndexDefinition<T> {

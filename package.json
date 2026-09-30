@@ -1,6 +1,6 @@
 {
   "name": "@blm/lakeorm",
-  "version": "0.1.46",
+  "version": "0.1.48",
   "description": "ORM with typescript",
   "module": "index.ts",
   "type": "module",

@@ -52,6 +52,38 @@ export class CreateTableBuilder<T extends object, S extends object = DatabaseSch
     return this;
   }
 
+  /**
+  * Adds a column that is explicitly generated based on others.
+  * @param name The name of the generated column.
+  * @param type The data type of the generated column.
+  * @param dependsOn An array of names of columns it depends on.
+  * @param expression The formula to calculate the value (e.g., "A * 2 + B").
+  */
+  public addGeneratedColumn(
+    name: ColumnNames<T>,
+    type: DataType,
+    dependsOn: ColumnNames<T>[],
+    expression: string
+  ): this {
+    if (!this.tableName) {
+      throw new Error("Table must be created before adding columns.");
+    }
+
+    this.columns.push({
+        name,
+        type,
+        nullable: false,
+        primaryKey: false,
+        unique: false,
+        isGenerated: {
+          dependsOn, 
+          expression
+        },
+    });
+
+    return this;
+  }
+
   /** Adds an index on column of the table */
   addIndex(indexName: string, columns: ColumnNames<T>[]): this {
     this.indexes.push({ name: indexName, columns });
@@ -66,17 +98,26 @@ export class CreateTableBuilder<T extends object, S extends object = DatabaseSch
     const columnDefs = this.columns.map(col => {
       const parts = [`"${this.camelToSnakeCase(col.name)}"`, col.type];
       
+      // Primary key and Unique Constraint
       if (col.primaryKey) parts.push('PRIMARY KEY');
       if (!col.nullable && !col.primaryKey) parts.push('NOT NULL');
       if (col.unique) parts.push('UNIQUE');
       if (col.defaultValue !== undefined) parts.push(`DEFAULT ${col.defaultValue}`);
 
+      // Foreign Key Constraint
+      // References for the Foreign key
       if(col.references !== undefined ) {
         let sql: string = ` REFERENCES ${col.references.table}s (${col.references.column})`
         if (col.references.onDelete) sql += ` ON DELETE ${col.references.onDelete}`;
         if (col.references.onUpdate) sql += ` ON UPDATE ${col.references.onUpdate}`;
         parts.push(sql)
       } 
+
+      // Generated column check
+      if(col.isGenerated !==undefined){
+        let sql: string = ` GENERATED ALWAYS AS (${col.isGenerated.expression}) `;
+        parts.push(sql)
+      }
       
       return parts.join(' ');
     });
