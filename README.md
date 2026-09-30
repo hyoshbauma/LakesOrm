@@ -138,6 +138,18 @@ bun run lakes table --delete User
 # or short format
 bun run lakes table -d User
 
+# Migration system initialised (Just needed to run once Or Never)
+bun run lakes migrate --init
+
+# or short format
+bun run lakes migrate -i
+
+# Migration status
+bun run lakes migrate --status
+
+# or short format
+bun run lakes migrate -s
+
 # Run the migration up to the Database
 bun run lakes migrate --up
 
