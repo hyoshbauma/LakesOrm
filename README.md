@@ -151,6 +151,23 @@ bun run lakes migrate -d
 
 ```
 
+## Some codes
 
+This just a example of migration (part of it actualy)
 
-This project was created using `bun init` in Bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+```typescript
+
+    // Run your schema changes here
+    public async up(): Promise<User | null> {
+          
+        return new UserTable().createTable()
+            .addColumn('id', 'SERIAL', { primaryKey: true })  // default comes with the migration file
+            .addColumn('firstName', 'TEXT') // to be se by you
+            .addColumn('lastName', 'TEXT')  // to be se by you
+            .addColumn('telephone', 'TEXT', {unique: true, nullable: false})  // to be se by you
+            .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
+            .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
+            .save();
+    }
+```
+
