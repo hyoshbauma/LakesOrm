@@ -151,46 +151,61 @@ bun run lakes migrate -d
 
 ```
 
-## Some Migration codes ()
+## Some Migration codes (Don't copy this code)
 
 Some code are auto-generatated for you in the migration file, you have to add only the column like :  
+
+Please remember that Tables' Interfaces needed to be configured/set first before working on the migration files
+
+```typescript
+
+// These types mirror your actual database tables
+export interface User {
+  readonly id? : number,
+  firstName: string,
+  lastName: string,
+  telephone: string,
+  createdAt?: Date,
+  updatedAt?: Date,
+}
+
+```
 
 This just a example of migration (part of it actualy)
 
 ```typescript
 
-    // Run your schema changes here
-    public async up(): Promise<User | null> {
+// Run your schema changes here
+public async up(): Promise<User | null> {
           
-        return new UserTable().createTable()
-            .addColumn('id', 'SERIAL', { primaryKey: true })  // default comes with the migration file
-            .addColumn('firstName', 'TEXT') // to be se by you
-            .addColumn('lastName', 'TEXT')  // to be se by you
-            .addColumn('telephone', 'TEXT', {unique: true, nullable: false})  // to be se by you
-            .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
-            .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
-            .save();
-    }
-
+    return new UserTable().createTable()
+        .addColumn('id', 'SERIAL', { primaryKey: true })  // default comes with the migration file
+        .addColumn('firstName', 'TEXT') // to be added as you set your Interface
+        .addColumn('lastName', 'TEXT')  // to be added as you set your Interface
+        .addColumn('telephone', 'TEXT', {unique: true, nullable: false})  // to be se by you
+        .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
+        .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'}) // default comes with the migration file
+        .save();
+}
 
 ```
 
-Example of  Generated Column
+Example of add Generated Column
 
 ```typescript
 
 // Run your schema changes here
-  public async up(): Promise<Orader | null> {
+public async up(): Promise<Orader | null> {
           
     return new OraderTable().createTable()
-      .addColumn('id', 'SERIAL', { primaryKey: true })
-      .addColumn('quanty', 'INT', {nullable: false})
-      .addColumn('price', 'INT', {nullable: false})
-      .addGeneratedColumn('total', 'INT', ['quanty','price'], 'quanty * price')
-      .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
-      .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
-      .save();
-  }
+        .addColumn('id', 'SERIAL', { primaryKey: true })
+        .addColumn('quanty', 'INT', {nullable: false})
+        .addColumn('price', 'INT', {nullable: false})
+        .addGeneratedColumn('total', 'INT', ['quanty','price'], 'quanty * price')
+        .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
+        .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
+        .save();
+}
 
 ```
 
