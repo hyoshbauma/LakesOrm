@@ -129,6 +129,7 @@ Help commands
 bun run lakes --help
 ```
 
+
 Create a table's Repository, table's interface in one file and the migration file
 ```bash
 bun run lakes table --create User
@@ -137,6 +138,7 @@ Or short format
 ```bash 
 bun run lakes table -c User
 ```
+
 
 Delete a table's Repository, table's interface in one file and the migration file
 ```bash
@@ -147,6 +149,7 @@ Or short format
 bun run lakes table -d User
 ```
 
+
 Migration system initialised (Just needed to run once Or Never)
 ```bash
 bun run lakes migrate --init
@@ -156,27 +159,32 @@ Or short format
 bun run lakes migrate -i
 ```
 
+Migration status
 ```bash
-# Migration status
 bun run lakes migrate --status
+```
 
-# or short format
+Or short format
+```bash
 bun run lakes migrate -s
 ```
 
+Run the migration up to the Database
 ```bash
-# Run the migration up to the Database
 bun run lakes migrate --up
+```
 
-# or short format
+Or short format
+```bash
 bun run lakes migrate -u
 ```
 
 ```bash
 # Run the migration down to the Database
 bun run lakes migrate --down
-
-# or short format
+```
+Or short format
+```bash
 bun run lakes migrate -d
 
 ```
