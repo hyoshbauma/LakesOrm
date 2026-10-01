@@ -64,7 +64,6 @@ Alternatively, create a .npmrc file inside a specific project root and add regis
 npm adduser --registry http://localhost:4873/
 ```
 4. Run npm publish inside the LakesORM directory.
-```
 ```bash
 npm publish
 ```
@@ -96,10 +95,10 @@ Full variable reference: [.env.example](.env.example)
 
 ## Folders and Files Command Setup
 
-Before runing any commands, please add this to your
+Before runing any commands, please add this to your package.json
 
 ```typescript
-# Then add the dev command to your existing package.json.
+// Then add the dev command to your existing package.json
 {
   "scripts": {
     "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
