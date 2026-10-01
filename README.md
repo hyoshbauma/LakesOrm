@@ -124,32 +124,35 @@ const OrmCtl = lakesOrmCtl(lakesClt);
 
 ## Key Commands
 
+Help commands
 ```bash
-# Help commands
 bun run lakes --help
 ```
 
+Create a table's Repository, table's interface in one file and the migration file
 ```bash
-# create a table's Repository, table's interface in one file and the migration file
 bun run lakes table --create User
-
-# or 
+```
+Or short format
+```bash 
 bun run lakes table -c User
 ```
 
+Delete a table's Repository, table's interface in one file and the migration file
 ```bash
-# delete a table's Repository, table's interface in one file and the migration file
 bun run lakes table --delete User
-
-# or short format
+```
+Or short format
+```bash
 bun run lakes table -d User
 ```
 
+Migration system initialised (Just needed to run once Or Never)
 ```bash
-# Migration system initialised (Just needed to run once Or Never)
 bun run lakes migrate --init
-
-# or short format
+```
+Or short format
+```bash
 bun run lakes migrate -i
 ```
 
