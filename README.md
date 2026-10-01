@@ -15,8 +15,8 @@ LakesORM is a modern Object-Relational Mapper (ORM) built specifically for TypeS
 
 ## Quick Start
 
-You need a Local NPM registry, this documentation is using verdaccio
-verdaccio can be installed in 2 ways :
+You need a Local NPM registry; this documentation uses Verdaccio
+Verdaccio can be installed in 2 ways :
 
 | Type | Installation details |
 |---|---|
@@ -38,7 +38,6 @@ Skip step 3 if you have a local or online NPM registry; then update step 7 corre
 
 
 3.1 Install globally via npm (Local NPM registry)
-```
 ```bash
 npm install -g verdaccio
 ```
