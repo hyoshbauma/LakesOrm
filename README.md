@@ -24,47 +24,66 @@ verdaccio can be installed in 2 ways :
 | Docker| `Run a Docker container` | 
 
 
+
+1. Install dependencies
 ```bash
-# 1. Install dependencies
 bun install
-
-# 2. To build the npm package:
+```
+2. To build the npm package:
+```bash
 bun run build
+```
 
-# skip step 3 if you have a local or online NPM registry
-# then update step 7 correctly
+Skip step 3 if you have a local or online NPM registry; then update step 7 correctly
 
 
-# 3.1 Install Globally via npm (Local NPM registry)
+3.1 Install globally via npm (Local NPM registry)
+```
+```bash
 npm install -g verdaccio
-
-# 3.2 Launch the local registry by running:
+```
+3.2 Launch the local registry by running:
+```bash
 verdaccio
+```
 
-# By default, the server will start running at http://localhost:4873
+By default, the server will start running at http://localhost:4873
 
-# 3.3 Point npm to your Local Registry
+
+3.3 Point npm to your Local Registry
+
+```bash
 npm config set registry http://localhost:4873/
+```
+Alternatively, create a .npmrc file inside a specific project root and add registry=http://localhost:4873/ to isolate its use
 
-# Alternatively, create a .npmrc file inside a specific project root and add registry=http://localhost:4873/ to isolate its use
 
+3.4 To publish packages, create a user profile in your local instance:
 
-# 3.4 To publish packages, create a user profile in your local instance:
+```bash
 npm adduser --registry http://localhost:4873/
-
-# 4. Run npm publish inside LakesORM directory.
+```
+4. Run npm publish inside the LakesORM directory.
+```
+```bash
 npm publish
+```
 
 
-# 5. create a new burn project
+5. Create a new Bun project
+```bash
 bun create hono@latest my-app
+```
 
-# 6. cd the project you have create
+6. cd into the project you have created
+```bash
 cd my-app
+```
 
-# 7. Install the npm dependancy from verdaccio
+8. Install the npm dependency from Verdaccio
+```
+```bash
 bun add  @blm/lakeorm
-
 ```
 
 ## Key Environment Variables
