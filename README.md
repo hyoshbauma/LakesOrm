@@ -186,6 +186,7 @@ bun run lakes migrate --down
 Or short format
 ```bash
 bun run lakes migrate -d
+
 ```
 
 ## Some Migration codes (Don't copy this code)
