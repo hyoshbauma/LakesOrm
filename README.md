@@ -81,7 +81,6 @@ cd my-app
 ```
 
 8. Install the npm dependency from Verdaccio
-```
 ```bash
 bun add  @blm/lakeorm
 ```
@@ -99,14 +98,16 @@ Full variable reference: [.env.example](.env.example)
 
 Before runing any commands, please add this to your
 
-```bash
+```typescript
 # Then add the dev command to your existing package.json.
 {
   "scripts": {
     "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
     }
 }
+```
 
+```bash
 
 # Create  these folders and inside them create the file named ctl.ts
 ./
@@ -205,7 +206,6 @@ bun run lakes migrate --down
 Or short format
 ```bash
 bun run lakes migrate -d
-
 ```
 
 ## Some Migration codes (Don't copy this code)
@@ -254,7 +254,7 @@ Example of add Generated Column
 // Run your schema changes here
 public async up(): Promise<Orader | null> {
           
-    return new OraderTable().createTable()
+    return new OrderTable().createTable()
         .addColumn('id', 'SERIAL', { primaryKey: true })
         .addColumn('quanty', 'INT', {nullable: false})
         .addColumn('price', 'INT', {nullable: false})
