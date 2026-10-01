@@ -107,6 +107,8 @@ To initialize the command layer, you need to configure the Lakecopy the code bel
 
 
 ```typescript
+// ctl.ts
+
 import { LakesCtlFacade, LakesServiceProvider, lakesOrmCtl } from '@blm/lakeorm';
 
 // Instantiate the ORM Provider
