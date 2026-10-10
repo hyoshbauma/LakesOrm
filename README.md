@@ -1,6 +1,6 @@
 # Lakes ORM
 
-LakesORM is a modern Object-Relational Mapper (ORM) built specifically for TypeScript (Bun) developers, designed to simplify PostgreSQL database interactions. Currently in the Staging phase, version 0.1.48 is an actively developed release, focusing on robust data modelling and type safety for complex applications.
+LakesORM is a modern Object-Relational Mapper (ORM) built specifically for TypeScript (Bun) developers, designed to simplify PostgreSQL database interactions. Currently in the Staging phase, version 0.1.67 is an actively developed release, focusing on robust data modelling and type safety for complex applications.
 
 ---
 
@@ -15,8 +15,8 @@ LakesORM is a modern Object-Relational Mapper (ORM) built specifically for TypeS
 
 ## Quick Start
 
-You need a Local NPM registry, this documentation is using verdaccio
-verdaccio can be installed in 2 ways :
+You need a Local NPM registry; this documentation uses Verdaccio
+Verdaccio can be installed in 2 ways :
 
 | Type | Installation details |
 |---|---|
@@ -79,7 +79,7 @@ bun create hono@latest my-app
 cd my-app
 ```
 
-8. Install the npm dependency from Verdaccio
+7. Install the npm dependency from Verdaccio
 ```bash
 bun add  @blm/lakeorm
 ```
@@ -95,13 +95,13 @@ Full variable reference: [.env.example](.env.example)
 
 ## Folders and Files Command Setup
 
-Before runing any commands, please add this to your
+Before runing any commands, please add this to your package.json
 
 ```typescript
-// Then add the dev command to your existing package.json.
+// Then add the lakes command to your existing package.json.
 {
   "scripts": {
-    "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
+    "lakes": "bun run ./src/database/lakes/ctl.ts"
     }
 }
 ```
@@ -269,7 +269,7 @@ Example of add Generated Column and Foreign Key
 // src/database/lakes/migration/2026_09_30_121783_create_order.ts
 
 // Run your schema changes here
-public async up(): Promise<Orader | null> {
+public async up(): Promise<Order | null> {
           
     return new OrderTable().createTable()
         .addColumn('id', 'SERIAL', { primaryKey: true })
@@ -291,7 +291,7 @@ Exemple of Insert
 // src/controller/user-controller.ts
 
 // Insert One
-const insertQuery: BuiltQuery = userTable.createQuery()
+const insertQuery = await userTable.createQuery()
     .values({
       firstName: 'John',
       lastName: 'Kwena',
@@ -303,7 +303,7 @@ const insertQuery: BuiltQuery = userTable.createQuery()
 
 
 //  Multible insert or builk insert
-const insertBulkQuery = userTable.insertQuery()
+const insertBulkQuery = await userTable.insertQuery()
   .values(
     [
       {
@@ -357,7 +357,7 @@ Example of ORM Transactions
 
 const userTable: UserTable = new UserTable();
 
-const orderTable: OraderTable = new OraderTable();
+const orderTable: OrderTable = new OrderTable();
 
 try {
         
@@ -495,10 +495,10 @@ export class UserTable extends BaseModel<User>{
   /**
    * A function that defines the relationship configuration for an Order entity.
    * 
-   * @param targetModel The model that the Order relates to (the Orader).
+   * @param targetModel The model that the Order relates to (the Order).
    * @returns The relationship configuration object.
    */
-  public Orders(): belongsTo<Orader> {
+  public Orders(): belongsTo<Order> {
     
     return {
       targetModel: new OrderTable(),
