@@ -60,12 +60,35 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     return this;
   }
 
-  whereIn<K extends ColumnNames<T>>(column: K, value: ColumnType<T, K>[]):this{
+  whereIn<K extends ColumnNames<T>>(column: K, values: ColumnType<T, K>[]):this{
     // in operator
-    const operator : Operator =  'IN';
+    const paramKey = this.params.length+1;
 
-    this.whereConditions.push({ column, operator, value });
-    this.params.push(value);
+    let sqlValue : string = '';
+    // get the last element index
+    const lastValue : number = values.length - 1;
+
+    // loop into the values
+    for (let index = 0; index < values.length; index++) {
+      // const element = values[index];
+      // check if is last element
+      if(lastValue == index){
+        //without commer if it is the last element
+        sqlValue += `$${index + paramKey} `;
+        continue;
+      }
+      // set the commer
+      sqlValue += `$${index + paramKey} , `;
+    }
+
+    // Converts columns values
+    this.conditions.push(
+      `${column} IN ( ${sqlValue} )`
+    );
+
+     // global params
+    this.params.push(...values);
+
     return this;
   }
 
@@ -130,6 +153,9 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     let columns = this.selectedColumns.length > 0
       ? this.selectedColumns.join(', ')
       : '*';
+
+    // the number of time whereIn is executed  
+    let whereInTime = 0;
 
     // refactor column name in snake-case 
     columns = this.camelToSnakeCase(columns);

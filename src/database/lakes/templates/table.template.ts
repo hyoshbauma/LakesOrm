@@ -34,13 +34,13 @@ export interface ${tableClass} {
 @Injectable()
 export class ${tableClass}Table extends BaseModel<${tableClass}>{
 
-protected override tableName = '${tableName}s';
-// column to encrypt
-protected override encryptedColumns: ColumnNames<${tableClass}>[] = [];
-// column to hide
-protected override hidden : ColumnNames<${tableClass}>[] = [];
-        
-constructor()
+  protected override tableName = '${tableName}s';
+  // column to encrypt
+  protected override encryptedColumns: ColumnNames<${tableClass}>[] = [];
+  // column to hide
+  protected override hidden : ColumnNames<${tableClass}>[] = [];
+          
+  constructor()
   {
     super('${tableName}s');
   }

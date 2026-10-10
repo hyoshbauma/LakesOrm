@@ -3,10 +3,11 @@ import type { AbstractTableSchema } from "../abstracts/tables";
 import { CreateBuilder, DeleteQueryBuilder, InsertBuilder, UpdateBuilder, UpsertQueryBuilder } from "../builder/query-mutations";
 import { QueryBuilder } from "../builder/query-builder";
 import { JoinableQueryBuilder } from "../builder/query-joins";
+import { QueryWithBuilder } from "../builder/query-relationship";
 import { AlterTableBuilder, CreateTableBuilder, DeleteTableBuilder } from "../builder/query-structure";
 import type { DatabaseSchema } from "../interfaces/schema";
 import type { ColumnNames } from "../types/type-db";
-import type { Relationship, WhereCondition } from "../interfaces/structure";
+import type { WhereCondition } from "../interfaces/structure";
 
 
 /*
@@ -20,12 +21,9 @@ import type { Relationship, WhereCondition } from "../interfaces/structure";
     // column to hide
     protected hidden : ColumnNames<T>[] = [];
 
-    // protected table: T ;
-
     constructor(tableName: string) {
-
-        // this.table = ;
-        this.tableName = tableName;
+      // set the table name
+      this.tableName = tableName;
     }
 
     /**
@@ -61,6 +59,13 @@ import type { Relationship, WhereCondition } from "../interfaces/structure";
     */
     fromQuery(): QueryBuilder<T> {
       return new QueryBuilder<T>(this.tableName, this.encryptedColumns);
+    }
+
+    /**
+    *  Select from table with belongs tables
+    **/
+    fromWithBuilder(): QueryWithBuilder<T> {
+      return new QueryWithBuilder<T>(this.tableName);
     }
     
     /**
@@ -210,51 +215,51 @@ import type { Relationship, WhereCondition } from "../interfaces/structure";
     }
 
     // Specialized method for relationship loading
-    async findWithRelationships(relation: Relationship, condition: WhereCondition): Promise<T[]> {
+    // async findWithRelationships(relation: Relationship, condition: WhereCondition): Promise<T[]> {
       
-      // const relationNames = relations.filter(r => r.startsWith('author')); // Extract desired relations
+    //   // const relationNames = relations.filter(r => r.startsWith('author')); // Extract desired relations
 
-      // 1. Fetch the main posts (e.g., SELECT * FROM posts)
-      const tableOneDatas = await this.fromQuery().
-      selectAll()
-      // .where(condition.column as ColumnNames<T>, condition.operator,condition.value);
-      .get();
+    //   // 1. Fetch the main posts (e.g., SELECT * FROM posts)
+    //   const tableOneDatas = await this.fromQuery().
+    //   selectAll()
+    //   // .where(condition.column as ColumnNames<T>, condition.operator,condition.value);
+    //   .get();
 
-      if (tableOneDatas.length === 0) {
-        return [];
-      }
+    //   if (tableOneDatas.length === 0) {
+    //     return [];
+    //   }
 
-      const defaultKey: string = relation.foreignKey ?? relation.targetModel +'_id';
+    //   const defaultKey: string = relation.foreignKey ?? relation.targetModel +'_id';
 
-      const tableTwoRepository = relation.Reppository;
+    //   const tableTwoRepository = relation.Reppository;
 
-      // // 2. Identify all unique author IDs needed (e.g., {1, 5, 1, 8})
-      const tableDataIds = [...new Set(tableOneDatas.map(p => p[defaultKey as keyof T]))];
+    //   // // 2. Identify all unique author IDs needed (e.g., {1, 5, 1, 8})
+    //   const tableDataIds = [...new Set(tableOneDatas.map(p => p[defaultKey as keyof T]))];
 
-      // // 3. Fetch the related authors in one batch (e.g., SELECT * FROM users WHERE id IN (1, 5, 8))
-      // const tableTwoDatas = await tableTwoRepository.fromQuery().select().whereIn('id', tableDataIds);
+    //   // // 3. Fetch the related authors in one batch (e.g., SELECT * FROM users WHERE id IN (1, 5, 8))
+    //   // const tableTwoDatas = await tableTwoRepository.fromQuery().select().whereIn('id', tableDataIds);
       
-      // const authors = await query(`SELECT * FROM users WHERE id IN (${tableDataIds.join(',')})`);
+    //   // const authors = await query(`SELECT * FROM users WHERE id IN (${tableDataIds.join(',')})`);
 
-      // const authorMap = new Map(tableTwoDatas.map(u => [u.id, u]));
+    //   // const authorMap = new Map(tableTwoDatas.map(u => [u.id, u]));
 
-      // // 4. Hydrate the relationship
-      // const hydratedPosts = posts.map(post => {
-      //   const author = authorMap.get(post.authorId);
+    //   // // 4. Hydrate the relationship
+    //   // const hydratedPosts = posts.map(post => {
+    //   //   const author = authorMap.get(post.authorId);
         
-      //   // Attach the resolved 'one' object to the 'many' Post object
-      //   if (author) {
-      //     // Accessing the result via the Post model's defined accessor
-      //     (post as any).getAuthor = () => author; 
-      //     // NOTE: A better ORM would dynamically set properties or use a separate DTO.
-      //   }
-      //   return post;
-      // });
+    //   //   // Attach the resolved 'one' object to the 'many' Post object
+    //   //   if (author) {
+    //   //     // Accessing the result via the Post model's defined accessor
+    //   //     (post as any).getAuthor = () => author; 
+    //   //     // NOTE: A better ORM would dynamically set properties or use a separate DTO.
+    //   //   }
+    //   //   return post;
+    //   // });
 
-      const hydratedPosts : T[] = [];
+    //   const hydratedPosts : T[] = [];
 
-      return hydratedPosts;
-    }
+    //   return hydratedPosts;
+    // }
 
     // Save changes on an instance back to the database
     // protected async save(instance: T): Promise<void> {
@@ -279,6 +284,24 @@ import type { Relationship, WhereCondition } from "../interfaces/structure";
     //         }
     //     }
     //     return entity as T;
+    // }
+
+    /**
+     * Finds the parent entity that a child belongs to.
+     */
+    // protected getBelongsToRelation<Child, Parent extends Identifiable>(
+    //   child: Child,
+    //   foreignKey: keyof Child,
+    //   parentCollection: Parent[]
+    // ): Parent | undefined {
+    //   const parentId = child[foreignKey];
+    //   return parentCollection.find((parent) => parent.id === parentId);
+    // }
+
+
+    // // The belongsTo function implementation inside a class
+    // public belongsTo(table: T[]): T | undefined {
+    //   return table.find(team => table.id === this.teamId);
     // }
     
     

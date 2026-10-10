@@ -75,11 +75,3 @@ export interface DateTimeLakes {
     minutes: string;
     seconds: string;
 }
-
-export interface Relationship {
-  type: RelationshipType; // e.g., 'one', 'many'
-  targetModel: keyof DatabaseSchema;    // The name/class of the related model
-  foreignKey?: string;    // The actual database foreign key column name
-  isInverse?: boolean;    // True if this relationship is the "many" side of a 1:N link
-  Reppository: BaseModel;    // True if this relationship is the "many" side of a 1:N link
-}

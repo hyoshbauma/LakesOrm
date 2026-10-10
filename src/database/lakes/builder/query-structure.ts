@@ -1,5 +1,5 @@
 import type { BuiltQuery, ColumnType, IndexDefinition } from "../interfaces/structure";
-import type { DatabaseSchema } from "../interfaces/schema";
+import type { DatabaseSchema } from "@lakes/interfaces/schema";
 import type { ColumnNames, DataType, defaultFn, foreignKeyAction, RelationTable } from "../types/type-db";
 import { Database } from "./database";
 
@@ -27,7 +27,8 @@ export class CreateTableBuilder<T extends object, S extends object = DatabaseSch
       defaultFn?: defaultFn; 
       foreignKey? : 
       {
-        table : Exclude<keyof DatabaseSchema, T>, 
+        // table : Exclude<keyof DatabaseSchema, T>, 
+        table : (keyof DatabaseSchema), 
         column : string, 
         onDelete?: foreignKeyAction, 
         onUpdate?: foreignKeyAction 

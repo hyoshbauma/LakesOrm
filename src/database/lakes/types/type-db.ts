@@ -40,3 +40,6 @@ export type foreignKeyAction = 'NO ACTION' | 'RESTRICT' | 'CASCADE' | 'SET NULL'
 
 // Relationship
 export type RelationshipType = 'one' | 'many' | 'manyToMany';
+
+
+

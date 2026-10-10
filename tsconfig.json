@@ -12,7 +12,11 @@
     "emitDeclarationOnly": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "paths": {
+      "src/*": ["./src/*"],
+      "@lakes/*": ["./src/database/lakes/*"]
+    }
   },
   "include": ["index.ts"],
   "exclude": ["node_modules"]

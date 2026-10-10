@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import { readdir } from "node:fs/promises";
-import type { Migration, MigrationContext, MigrationRecord, MigrationResult } from './interfaces/migration.';
+import type { Migration, MigrationContext, MigrationRecord, MigrationResult } from './interfaces/migration';
 import { Database } from './builder/database';
 import { lakesTableMigrationPath, lakesMigrationsPath } from './tools/location';
 import { Injectable, Singleton } from '../../../container';
