@@ -246,6 +246,8 @@ This just a example of migration (part of it actualy)
 
 ```typescript
 
+// src/database/lakes/migration/2026_09_30_121851_create_user.ts
+
 // Run your schema changes here
 public async up(): Promise<User | null> {
           
@@ -264,6 +266,8 @@ public async up(): Promise<User | null> {
 Example of add Generated Column and Foreign Key
 
 ```typescript
+
+// src/database/lakes/migration/2026_09_30_121783_create_order.ts
 
 // Run your schema changes here
 public async up(): Promise<Orader | null> {
@@ -284,6 +288,8 @@ public async up(): Promise<Orader | null> {
 Exemple of Insert
 
 ```typescript
+
+// src/controller/user-controller.ts
 
 const insertQuery: BuiltQuery = userTable.createQuery()
     .values({
@@ -314,12 +320,37 @@ const insertBulkQuery = userTable.insertQuery()
   )
   .save();
 
+const upsetQuery  = await userTable.upsetQuery()
+    .values(
+      [
+        {
+          firstName: 'Linda',
+          lastName: 'Zhone',
+          telephone: "24398321432142"
+        },
+        {
+          firstName: 'Kakule',
+          lastName: 'Bahati',
+          telephone: "243983214321413"
+        }
+      ]
+    )
+    .conflictOn('telephone') // these column must have unique constrain set
+    .doUpdateSet('firstName', 'lastName', 'telephone')
+    .save()
+
+console.log(data);
+
+
+
 ```
 
 
 Example of ORM Transactions
 
 ```typescript 
+
+// src/controller/user-controller.ts
 
 // add this to your code
 
@@ -437,6 +468,9 @@ Example of relationship
 ```typescript
 
 // Run your schema changes here
+
+// src/database/lakes/tables/user.ts
+
 /*
 * User Table 
 */
@@ -475,6 +509,10 @@ export class UserTable extends BaseModel<User>{
     
     
 } 
+
+
+
+// src/controller/user-controller.ts
 
 // add this to your code
 
