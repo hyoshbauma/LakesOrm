@@ -157,7 +157,6 @@ import type { WhereCondition } from "../interfaces/structure";
         // Leverage the query builder under the hood
         const row: any = await this.fromQuery()
         .select(...fieldsToSelect)
-        .selectAll()
         .whereEquals(field, value)
         .find();
 

@@ -16,7 +16,8 @@ export class JoinableQueryBuilder<T extends object, S extends object = DatabaseS
     leftColumn: L,
     rightColumn: CompatibleColumnNames<S[K], ColumnType<T, L>>
   ): JoinableQueryBuilder<JoinedTables<T, S[K]>, S> {
-    const joinSql = `INNER JOIN ${String(table)} ON ${this.tableName}.${leftColumn} = ${String(table)}.${rightColumn}`;
+    const joined = `${this.camelToSnakeCase(String(table))}s`;
+    const joinSql = `INNER JOIN ${joined} ON ${this.tableName}.${this.camelToSnakeCase(leftColumn)} = ${joined}.${this.camelToSnakeCase(String(rightColumn))}`;
     this.addJoin(joinSql);
 
     // Cast to the new type that includes both tables
@@ -29,7 +30,8 @@ export class JoinableQueryBuilder<T extends object, S extends object = DatabaseS
     leftColumn: L,
     rightColumn: CompatibleColumnNames<S[K], ColumnType<T, L>>
   ): JoinableQueryBuilder<JoinedTables<T, Nullable<S[K]>>, S> {
-    const joinSql = `LEFT JOIN ${String(table)} ON ${this.tableName}.${leftColumn} = ${String(table)}.${rightColumn}`;
+    const joined = `${this.camelToSnakeCase(String(table))}s`;
+    const joinSql = `LEFT JOIN ${joined} ON ${this.tableName}.${this.camelToSnakeCase(leftColumn)} = ${joined}.${this.camelToSnakeCase(String(rightColumn))}`;
     this.addJoin(joinSql);
 
     // Nullable because left join may return null values for the joined table

@@ -18,6 +18,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
   protected joins: string[] = [];
   private params: unknown[] = [];
   private conditions: string[] = [];
+  private whereParams: number[] = [];
 
   constructor(table: string, encryptedColumns: string[]  = []) {
     super()
@@ -53,6 +54,8 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     operator: Operator,
     value?: ColumnType<T, K>
   ): this {
+    // the placeholder this condition will use
+    this.whereParams.push(this.params.length + 1);
     this.whereConditions.push({ column, operator, value });
     if (operator !== 'IS NULL' && operator !== 'IS NOT NULL') {
       this.params.push(value);
@@ -61,6 +64,12 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
   }
 
   whereIn<K extends ColumnNames<T>>(column: K, values: ColumnType<T, K>[]):this{
+    // an empty list matches nothing
+    if (values.length === 0) {
+      this.conditions.push('FALSE');
+      return this;
+    }
+
     // in operator
     const paramKey = this.params.length+1;
 
@@ -83,7 +92,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
 
     // Converts columns values
     this.conditions.push(
-      `${column} IN ( ${sqlValue} )`
+      `${this.camelToSnakeCase(column)} IN ( ${sqlValue} )`
     );
 
      // global params
@@ -97,7 +106,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     const paramKey = `$${this.params.length+1}`;
     // Converts path like "metadata" and checks containment
     this.conditions.push(
-      `${path} @> ${paramKey}::jsonb`
+      `${this.camelToSnakeCase(path)} @> ${paramKey}::jsonb`
     );
     this.params.push(JSON.stringify(value));
     return this;
@@ -109,7 +118,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     const accessor = jsonPath.reduce((acc, key, idx) => {
       const op = idx === jsonPath.length - 1 ? '->>' : '->';
       return `${acc} ${op} '${key}'`;
-    }, column);
+    }, this.camelToSnakeCase(column));
 
     this.conditions.push(`${accessor} = ${paramKey}`);
     this.params.push(value);
@@ -160,6 +169,10 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     // refactor column name in snake-case 
     columns = this.camelToSnakeCase(columns);
 
+    // with a join, pg keeps the last of several columns with the same name (id, created_at, ...):
+    // list this table's columns last so its values win over the joined table's
+    if (columns === '*' && this.joins.length > 0) columns = `*, ${this.tableName}.*`;
+
     parts.push(`SELECT ${columns}`);
 
     // FROM clause
@@ -167,7 +180,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
 
     // JOIN clauses
     if (this.joins.length > 0) {
-      parts.push(this.joins.join(' '));
+      parts.push(' ' + this.joins.join(' '));
     }
 
     // WHERE clause
@@ -181,7 +194,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
           return `${c.column} ${c.operator}`;
         }
 
-        return `${c.column} ${c.operator} $${i + 1}`;
+        return `${c.column} ${c.operator} $${this.whereParams[i]}`;
       });
 
       parts.push(` WHERE ${conditions.join(' AND ')}`);
@@ -244,7 +257,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
 
     // JOIN clauses
     if (this.joins.length > 0) {
-      parts.push(this.joins.join(' '));
+      parts.push(' ' + this.joins.join(' '));
     }
 
     // WHERE clause
@@ -258,9 +271,15 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
           return `${c.column} ${c.operator}`;
         }
 
-        return `${c.column} ${c.operator} $${i + 1}`;
+        return `${c.column} ${c.operator} $${this.whereParams[i]}`;
       });
       parts.push(` WHERE ${conditions.join(' AND ')}`);
+    }
+
+    // whereIn and JSON conditions
+    if(this.conditions.length){
+      const checkJson = this.whereConditions.length > 0 ? 'AND' : ' WHERE'
+      parts.push(` ${checkJson} ${this.conditions.join(' AND ')}`);
     }
 
     const query : BuiltQuery =  {
@@ -271,7 +290,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     // { count: "5" }
     const data : any =  await this.executeOne(query);
 
-    return  data.count;
+    return  Number(data.count);
   }
 
   // get all the data from the query
