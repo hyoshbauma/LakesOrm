@@ -342,7 +342,7 @@ console.log(usersOrder[0]);
   telephone: "24398321432141",
   createdAt: 2026-10-10T08:51:27.978Z,
   updatedAt: 2026-10-10T08:51:27.978Z,
-  oraders: [
+  orders: [
     {
       id: 1,
       quanty: 2,
