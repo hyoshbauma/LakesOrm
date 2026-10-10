@@ -39,6 +39,8 @@ export class ${tableClass}Table extends BaseModel<${tableClass}>{
   protected override encryptedColumns: ColumnNames<${tableClass}>[] = [];
   // column to hide
   protected override hidden : ColumnNames<${tableClass}>[] = [];
+  // id columns to store encrypted: the id, and foreign keys that point at an encrypted id
+  protected override encryptedIds: ColumnNames<${tableClass}>[] = [];
           
   constructor()
   {

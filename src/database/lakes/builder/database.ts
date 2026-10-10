@@ -4,6 +4,7 @@ import type { CamelizeKeys } from '../types/type-case';
 import { CryptoAes256C } from '../tools/crypto';
 import type { BuiltQuery } from '../interfaces/structure';
 import type { LakesOrm } from '../interfaces/driver';
+import { randomUUID } from 'crypto';
 
 
 // connection to the db
@@ -155,6 +156,12 @@ export class Database {
             for (const key of Object.keys(obj)) {
                 const snakeKey = this.camelToSnakeCase(key);
 
+                if(this.encryptedIds.includes(snakeKey))
+                {
+                    result[snakeKey] = this.encryptId(obj[key]);
+                    continue;
+                }
+
                 if(this.encryptedColumns.includes(snakeKey))
                 {
                     result[snakeKey] = this.dbEcncryption(obj[key]);
@@ -168,7 +175,7 @@ export class Database {
 
 
     // Deep object transformer combining runtime and types
-    protected camelizeKeys<T>(obj: T): T {
+    protected camelizeKeys<T>(obj: T, nested: boolean = false): T {
         if (obj instanceof Date) {
             return obj as any;
         }
@@ -176,12 +183,20 @@ export class Database {
         //     return obj as any;
         // }
         if (Array.isArray(obj)) {
-            return obj.map((v) => this.camelizeKeys(v)) as any;
+            return obj.map((v) => this.camelizeKeys(v, nested)) as any;
         }
         if (obj !== null && typeof obj === 'object') {
             return Object.fromEntries(
             Object.entries(obj).map(([key, value]) =>
                 { 
+                    // encrypted ids are columns of the row itself, not keys inside a JSON value
+                    if(!nested && this.encryptedIds.includes(key)){
+                        return [
+                            key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
+                            this.decryptId(value),
+                        ];
+                    }
+
                     // // get the encrypted columns and decrypt them
                     if(this.encryptedColumns.includes(key)){
                         return [
@@ -194,7 +209,7 @@ export class Database {
                     // nothing to decrypte
                     return [
                         key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                        this.camelizeKeys(value),
+                        this.camelizeKeys(value, true),
                     ];
         
         })
@@ -297,6 +312,62 @@ export class Database {
         if (value == null) return value;
 
         return this.cipher().encrypt(value);
+    }
+
+    // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
+    protected encryptedIds: string[] = [];
+
+    public withEncryptedIds(columns: string[]): this
+    {
+        this.encryptedIds = columns.map((column) => this.camelToSnakeCase(column));
+
+        return this;
+    }
+
+    // the built-in key is public: an id encrypted with it would not be protected
+    private idCipher(): CryptoAes256C
+    {
+        if (!process.env.APP_KEY) {
+            throw new Error("LakesORM: encrypted ids need APP_KEY to be set");
+        }
+
+        return this.cipher();
+    }
+
+    // equal ids give equal ciphertexts, so an encrypted id can still be compared and joined
+    protected encryptId(value: any): any
+    {
+        return value == null ? value : this.idCipher().encryptDeterministic(String(value));
+    }
+
+    protected decryptId(value: any): any
+    {
+        return value == null ? value : this.idCipher().decryptDeterministic(value);
+    }
+
+    // a value compared with an encrypted id has to be encrypted the same way
+    protected idParam(column: string, value: any, operator: string = '='): any
+    {
+        if (!this.encryptedIds.includes(this.camelToSnakeCase(column))) return value;
+
+        if (operator !== '=' && operator !== '!=') {
+            throw new Error(`LakesORM: '${operator}' cannot be used on '${column}', an encrypted id only supports =, != and whereIn`);
+        }
+
+        return this.encryptId(value);
+    }
+
+    protected newId(): string
+    {
+        return randomUUID();
+    }
+
+    // the database cannot generate an encrypted id: rows without one get a UUID
+    protected withIds<R>(rows: R[]): R[]
+    {
+        if (!this.encryptedIds.includes('id')) return rows;
+
+        return rows.map((row: any) => row.id == null ? { ...row, id: this.newId() } : row);
     }
     
     

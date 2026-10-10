@@ -58,7 +58,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     this.whereParams.push(this.params.length + 1);
     this.whereConditions.push({ column, operator, value });
     if (operator !== 'IS NULL' && operator !== 'IS NOT NULL') {
-      this.params.push(value);
+      this.params.push(this.idParam(column, value, operator));
     }
     return this;
   }
@@ -96,7 +96,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     );
 
      // global params
-    this.params.push(...values);
+    this.params.push(...values.map((value) => this.idParam(column, value)));
 
     return this;
   }
