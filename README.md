@@ -98,7 +98,7 @@ Full variable reference: [.env.example](.env.example)
 Before runing any commands, please add this to your
 
 ```typescript
-# Then add the dev command to your existing package.json.
+// Then add the dev command to your existing package.json.
 {
   "scripts": {
     "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
@@ -109,7 +109,7 @@ Before runing any commands, please add this to your
 Before using the foreign key
 
 ```typescript
-# Then add this in your tsconfig.json
+// Then add this in your tsconfig.json
 "compilerOptions": {
 
     //....
@@ -281,6 +281,157 @@ public async up(): Promise<Orader | null> {
 
 ```
 
+Exemple of Insert
+
+```typescript
+
+const insertQuery: BuiltQuery = userTable.createQuery()
+    .values({
+      firstName: 'John',
+      lastName: 'Kwena',
+      telephone: "24398321432141",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })
+  .save();
+
+
+// // Usage Multible insert
+const insertBulkQuery = userTable.insertQuery()
+  .values(
+    [
+      {
+        firstName: 'Linda',
+        lastName: 'Zhone',
+        telephone: "24398321432142"
+      },
+      {
+        firstName: 'Kakule',
+        lastName: 'Bahati',
+        telephone: "243983214321413"
+      }
+    ],
+  )
+  .save();
+
+```
+
+
+Example of ORM Transactions
+
+```typescript 
+
+// add this to your code
+
+const userTable: UserTable = new UserTable();
+
+const orderTable: OraderTable = new OraderTable();
+
+try {
+        
+  // 1. Initialize the Transaction Builder
+  const txBuilder = new TransactionBuilder();
+
+  // start the Transaction
+  await txBuilder.begin();
+
+  // --- Define the Transaction Logic ---
+
+  // Operation 1: Insert data
+  txBuilder.addOperation(async (c) => {
+    console.log("-> Step 1: Inserting user...");
+
+    const insertQuery: BuiltQuery = userTable.createQuery()
+      .values({
+        firstName: 'John',
+        lastName: 'Kwena',
+        telephone: "24398321432141",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .build();
+
+    await c.query(insertQuery.sql, insertQuery.params);
+
+  });
+
+  // Operation 2: Bulk Insert data
+  txBuilder.addOperation(async (c) => {
+    console.log("-> Step 2: Bulk Inserting user...");
+
+    // // Usage Multible insert
+    const insertBulkQuery = userTable.insertQuery()
+      .values(
+        [
+          {
+            firstName: 'Linda',
+            lastName: 'Zhone',
+            telephone: "24398321432142"
+          },
+          {
+            firstName: 'Kakule',
+            lastName: 'Bahati',
+            telephone: "243983214321413"
+          }
+        ],
+      )
+      .build();
+
+      await c.query(insertBulkQuery.sql, insertBulkQuery.params);
+
+  });
+
+  // Operation 3: Insert related data (Simulate a failure for testing rollback)
+  // txBuilder.addOperation(async (c) => {
+  //     console.log("-> Step 3: Inserting order...");
+  //     // Simulate an error condition if needed:
+  //     // throw new Error("Simulated database failure!"); 
+  //     await c.query('INSERT INTO orders (user_id) VALUES (1)');
+  // });
+
+  // Operation 2: Bulk Insert data
+  txBuilder.addOperation(async (c) => {
+    console.log("-> Step 2: Bulk Inserting user...");
+
+    // // Usage Multible insert
+    const insertBulkQuery = orderTable.insertQuery()
+      .values(
+        [
+          {
+            quanty: 2,
+            price: 200,
+            userId: 1,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          },
+          {
+            quanty: 5,
+            price: 600,
+            userId: 1,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }      
+        ],
+    )
+    .build();
+
+    await c.query(insertBulkQuery.sql, insertBulkQuery.params);
+        
+  });
+
+
+
+  // 3. Execute the transaction block
+  const result = await txBuilder.execute();
+  console.log("✅ Final Result:", result);
+
+
+} catch (error) {
+  console.error("❌ FATAL ERROR: The entire process failed.", error);
+}  
+```
+
+
 Example of relationship
 
 ```typescript
@@ -363,5 +514,3 @@ console.log(usersOrder[0]);
   ],
 }
 ```
-
-
