@@ -247,7 +247,7 @@ public async up(): Promise<User | null> {
 
 ```
 
-Example of add Generated Column
+Example of add Generated Column and Foreign Key
 
 ```typescript
 
@@ -261,8 +261,94 @@ public async up(): Promise<Orader | null> {
         .addGeneratedColumn('total', 'INT', ['quanty','price'], 'quanty * price')
         .addColumn('createdAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
         .addColumn('updatedAt', 'TIMESTAMP WITH TIME ZONE', {defaultFn: 'NOW()'})
+        .addColumn('userId', 'INT', { foreignKey: {table: 'user', column: 'id'}})
         .save();
 }
+
+```
+
+Example of relationship
+
+```typescript
+
+// Run your schema changes here
+/*
+* User Table 
+*/
+@Singleton
+@Injectable()
+export class UserTable extends BaseModel<User>{
+
+  protected override tableName = 'users';
+  // column to encrypt
+  protected override encryptedColumns: ColumnNames<User>[] = [];
+  // column to hide
+  protected override hidden : ColumnNames<User>[] = [];
+          
+  constructor()
+  {
+    super('users');
+  }
+
+   // add the code below in your table base model
+
+  /**
+   * A function that defines the relationship configuration for an Order entity.
+   * 
+   * @param targetModel The model that the Order relates to (the Orader).
+   * @returns The relationship configuration object.
+   */
+  public Orders(): belongsTo<Orader> {
+    
+    return {
+      targetModel: new OrderTable(),
+      foreignKey: 'userId',
+      type: 'one'
+    }
+  }
+    
+    
+    
+} 
+
+// add this to your code
+
+const userTable: UserTable = new UserTable();
+
+// user it like this
+const usersOrder = await userTable.fromWithBuilder().withOnly(userTable.Orders()).selectAll().get();
+
+console.log(usersOrder[0]);
+
+// result
+// {
+//   id: 1,
+//   firstName: "John",
+//   lastName: "Kwame",
+//   telephone: "24398321432141",
+//   createdAt: 2026-10-10T08:51:27.978Z,
+//   updatedAt: 2026-10-10T08:51:27.978Z,
+//   oraders: [
+//     {
+//       id: 1,
+//       quanty: 2,
+//       price: 200,
+//       total: 400,
+//       createdAt: 2026-10-10T08:51:27.984Z,
+//       updatedAt: 2026-10-10T08:51:27.984Z,
+//       userId: 1,
+//     }, {
+//       id: 2,
+//       quanty: 5,
+//       price: 600,
+//       total: 3000,
+//       createdAt: 2026-10-10T08:51:27.984Z,
+//       updatedAt: 2026-10-10T08:51:27.984Z,
+//       userId: 1,
+//     }
+//   ],
+// }
+
 
 ```
 
