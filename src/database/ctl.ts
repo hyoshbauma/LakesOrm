@@ -1,11 +1,7 @@
 import { Command } from 'commander';
 import { LakesCtlFacade } from './lakes/lake.command';
-import { LakesServiceProvider } from './lakes/lakes.provider';
 
 
-const lakesProvider = new LakesServiceProvider();
-
-const lakesClt : LakesCtlFacade = lakesProvider.getLakesCtlOf();
 
 
 export function lakesOrmCtl (lakesClt : LakesCtlFacade){
@@ -21,9 +17,9 @@ program
 
 program
   .command('table')
-  .description('Run pending migrations')
+  .description('Create or delete table files')
   .option('-c, --create <name>', 'Create Table Files (TableClass & Migration)')
-  .option('-d, --delete <name>', 'Create Table Files (TableClass & Migration)')
+  .option('-d, --delete <name>', 'Delete Table Files (TableClass & Migration)')
   .action(async (options) => {
     
     if(options.create) await lakesClt.createTableFiles(options.create) ;
@@ -37,15 +33,15 @@ program
   .description('Run pending migrations')
   .option('-i, --init', 'Initialize migration system')
   .option('-s, --status', 'Show migration status')
-  .option('-u, --up ', 'Migrations to run')
+  .option('-u, --up', 'Migrations to run')
   .option('-d, --down', 'Migrations to rollback')
   .action(async (options) => {
     
-    if(options.init) lakesClt.migrationInit() ;
+    if(options.init) await lakesClt.migrationInit() ;
 
     if(options.status) await lakesClt.migrationStatus();
 
-    if(options.up || options.upt) await lakesClt.migrationUp();
+    if(options.up) await lakesClt.migrationUp();
 
     if(options.down) await lakesClt.migrationDown();
 
@@ -53,6 +49,10 @@ program
 
 
 
-program.parse();
+program.parseAsync().catch((error) => {
+  console.error(error);
+  // exit now: after a failure the pool can still hold idle clients, which keep the process alive
+  process.exit(1);
+});
 
 }

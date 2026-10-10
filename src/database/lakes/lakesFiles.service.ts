@@ -241,7 +241,8 @@ export type ColumnType<T, K extends keyof T> = T[K];`;
             await this.migrationTemplateService.createFile(tableSchema);
             
         } catch (error) {
-            
+            // the CLI reports the failure and exits with code 1
+            throw error;
         }
 
     }
@@ -265,7 +266,8 @@ export type ColumnType<T, K extends keyof T> = T[K];`;
             await this.migrationTemplateService.deleteFile(tableSchema!); 
             
         } catch (error) {
-            console.log(error);
+            // the CLI reports the failure and exits with code 1
+            throw error;
         } 
     }
 
