@@ -291,6 +291,7 @@ Exemple of Insert
 
 // src/controller/user-controller.ts
 
+// Insert One
 const insertQuery: BuiltQuery = userTable.createQuery()
     .values({
       firstName: 'John',
@@ -302,7 +303,7 @@ const insertQuery: BuiltQuery = userTable.createQuery()
   .save();
 
 
-// // Usage Multible insert
+//  Multible insert or builk insert
 const insertBulkQuery = userTable.insertQuery()
   .values(
     [
@@ -320,6 +321,9 @@ const insertBulkQuery = userTable.insertQuery()
   )
   .save();
 
+
+
+// upset Query
 const upsetQuery  = await userTable.upsetQuery()
     .values(
       [
@@ -339,9 +343,7 @@ const upsetQuery  = await userTable.upsetQuery()
     .doUpdateSet('firstName', 'lastName', 'telephone')
     .save()
 
-console.log(data);
-
-
+console.log(upsetQuery);
 
 ```
 
@@ -420,7 +422,7 @@ try {
   //     await c.query('INSERT INTO orders (user_id) VALUES (1)');
   // });
 
-  // Operation 2: Bulk Insert data
+  // Operation 3: Bulk Insert data
   txBuilder.addOperation(async (c) => {
     console.log("-> Step 2: Bulk Inserting user...");
 
