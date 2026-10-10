@@ -107,6 +107,21 @@ Before runing any commands, please add this to your
 }
 ```
 
+Before using the foreign key
+
+```typescript
+# Then add this in your tsconfig.json
+"compilerOptions": {
+
+    //....
+
+    "paths": {
+        "src/*": ["./src/*"],
+        "@lakes/*": ["./src/database/lakes/*"]
+        }
+}
+```
+
 ```bash
 
 # Create  these folders and inside them create the file named ctl.ts
