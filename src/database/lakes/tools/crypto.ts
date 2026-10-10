@@ -16,6 +16,9 @@ export class CryptoAes256C {
   // encrypt-then-MAC: a value is encrypted with one key and authenticated with another, both derived from the key above
   private readonly encryptionKey: Buffer;
   private readonly macKey: Buffer;
+  // keys for deterministic (searchable) encryption, derived from the key above
+  private readonly deterministicKey: Buffer;
+  private readonly deterministicMacKey: Buffer;
 
   /**
    * @param secretKey Must be exactly 32 bytes (256 bits)
@@ -39,6 +42,8 @@ export class CryptoAes256C {
 
     this.encryptionKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/key', 32));
     this.macKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/mac', 32));
+    this.deterministicKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/key', 32));
+    this.deterministicMacKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/mac', 32));
   }
 
   /**
@@ -185,6 +190,48 @@ export class CryptoAes256C {
     }
 
     throw new Error("MAC doesn't match the orignal value");
+  }
+
+  /**
+   * Encrypts a value that must stay searchable (an id for example), as SIV with a MAC:
+   * the MAC of the value is also the IV, so equal values always give equal ciphertexts
+   * and can be compared, joined and indexed. Result: base64url(MAC + ciphertext).
+   */
+  public encryptDeterministic(plaintext: string): string {
+    const data = Buffer.from(plaintext, 'utf8');
+    const mac = this.deterministicMAC(data);
+
+    const cipher = crypto.createCipheriv('aes-256-ctr', this.deterministicKey, mac);
+
+    return Buffer.concat([mac, cipher.update(data), cipher.final()]).toString('base64url');
+  }
+
+  /**
+   * Decrypts a value produced by encryptDeterministic, and returns it only if its MAC matches.
+   * CTR has no padding, so decrypting before the check reveals nothing.
+   */
+  public decryptDeterministic(encrypted: string): string {
+    const data = Buffer.from(String(encrypted), 'base64url');
+
+    // 16 bytes of MAC come before the ciphertext
+    if (data.length < 16) {
+      throw new Error("This is not a valid encrypted value");
+    }
+
+    const mac = data.subarray(0, 16);
+    const decipher = crypto.createDecipheriv('aes-256-ctr', this.deterministicKey, mac);
+    const decrypted = Buffer.concat([decipher.update(data.subarray(16)), decipher.final()]);
+
+    if (!crypto.timingSafeEqual(mac, this.deterministicMAC(decrypted))) {
+      throw new Error("MAC doesn't match the orignal value");
+    }
+
+    return decrypted.toString('utf8');
+  }
+
+  // HMAC-SHA256 of the value, cut to 16 bytes: the IV of AES-256-CTR and the tag that authenticates the value
+  private deterministicMAC(data: Buffer): Buffer {
+    return crypto.createHmac('sha256', this.deterministicMacKey).update(data).digest().subarray(0, 16);
   }
 
 
