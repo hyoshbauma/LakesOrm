@@ -12,8 +12,10 @@ export class Database {
 
     // Prostgres
     protected lakesOrm: LakesOrm;
-    // Prostgres
-    protected postgres?: Pool ;
+    // Prostgres: the shared pool, looked up on every use unless a pool was assigned
+    private postgresPool?: Pool;
+    protected get postgres(): Pool | undefined { return this.postgresPool ?? this.lakesOrm?.db ?? undefined; }
+    protected set postgres(pool: Pool | undefined) { this.postgresPool = pool; }
     // Mysql
     protected mysql?: Pool;
     // database driver
@@ -25,22 +27,34 @@ export class Database {
 
     constructor() {
         // database driver
-        this.driver = process.env.DB_CONNECTION!;
+        this.driver = process.env.DB_CONNECTION ?? 'pgsql';
+        // the database this builder talks to
+        this.connectionString = process.env.DATABASE_URL;
         // database connection
         this.lakesOrm = this.connectionDb(this.driver);
 
         this.appKey = "base64:P1G6tpneoQAlRZbZgdZ4on/8zMM+33JAtFT9VJn1Qc=";
     }
 
+    // one pool per DATABASE_URL, shared by every builder that uses it
+    private static pools = new Map<string | undefined, Pool>();
+
+    private connectionString?: string;
+
     /**
      *  Prostgres connection
      **/
     private postgresConnection() : Pool
     {
-        const connectionString: string = process.env.DATABASE_URL!;
-        this.postgres = new Pool({ connectionString });
+        let pool = Database.pools.get(this.connectionString);
 
-        return this.postgres;
+        // create the pool once, or again after it was ended
+        if (!pool || pool.ending) {
+            pool = new Pool({ connectionString: this.connectionString });
+            Database.pools.set(this.connectionString, pool);
+        }
+
+        return pool;
     }
 
     /**
@@ -70,12 +84,16 @@ export class Database {
      **/
     private connectionDb(driver : string): LakesOrm
     {
+        // the pool is looked up on every use, so a builder made before
+        // MigrationService.close() or before DATABASE_URL was set still works
+        const database = this;
+
         // connection to postgres
         if(driver == 'pgsql'){
             
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -83,7 +101,7 @@ export class Database {
         if(driver == 'mysql'){
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
