@@ -38,7 +38,6 @@ Skip step 3 if you have a local or online NPM registry; then update step 7 corre
 
 
 3.1 Install globally via npm (Local NPM registry)
-```
 ```bash
 npm install -g verdaccio
 ```
@@ -64,7 +63,7 @@ Alternatively, create a .npmrc file inside a specific project root and add regis
 npm adduser --registry http://localhost:4873/
 ```
 4. Run npm publish inside the LakesORM directory.
-```
+
 ```bash
 npm publish
 ```
@@ -336,35 +335,33 @@ const usersOrder = await userTable.fromWithBuilder().withOnly(userTable.Orders()
 console.log(usersOrder[0]);
 
 // result
-// {
-//   id: 1,
-//   firstName: "John",
-//   lastName: "Kwame",
-//   telephone: "24398321432141",
-//   createdAt: 2026-10-10T08:51:27.978Z,
-//   updatedAt: 2026-10-10T08:51:27.978Z,
-//   oraders: [
-//     {
-//       id: 1,
-//       quanty: 2,
-//       price: 200,
-//       total: 400,
-//       createdAt: 2026-10-10T08:51:27.984Z,
-//       updatedAt: 2026-10-10T08:51:27.984Z,
-//       userId: 1,
-//     }, {
-//       id: 2,
-//       quanty: 5,
-//       price: 600,
-//       total: 3000,
-//       createdAt: 2026-10-10T08:51:27.984Z,
-//       updatedAt: 2026-10-10T08:51:27.984Z,
-//       userId: 1,
-//     }
-//   ],
-// }
-
-
+{
+  id: 1,
+  firstName: "John",
+  lastName: "Kwame",
+  telephone: "24398321432141",
+  createdAt: 2026-10-10T08:51:27.978Z,
+  updatedAt: 2026-10-10T08:51:27.978Z,
+  oraders: [
+    {
+      id: 1,
+      quanty: 2,
+      price: 200,
+      total: 400,
+      createdAt: 2026-10-10T08:51:27.984Z,
+      updatedAt: 2026-10-10T08:51:27.984Z,
+      userId: 1,
+    }, {
+      id: 2,
+      quanty: 5,
+      price: 600,
+      total: 3000,
+      createdAt: 2026-10-10T08:51:27.984Z,
+      updatedAt: 2026-10-10T08:51:27.984Z,
+      userId: 1,
+    }
+  ],
+}
 ```
 
 
