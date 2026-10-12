@@ -212,9 +212,8 @@ Or short format
 ```bash
 bun run lakes migrate -u
 ```
-
+Run the migration down to the Database
 ```bash
-# Run the migration down to the Database
 bun run lakes migrate --down
 ```
 Or short format
