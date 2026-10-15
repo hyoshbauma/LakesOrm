@@ -20,7 +20,8 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   private conditions: string[] = [];
   private queries: BuiltQuery[] = [];
   private tablesRelations: string[] = [];
-  private foreignKey: string[] = [];
+  private foreignKeys: string[] = [];
+  private tableKeys: string[] = [];
 
   constructor(table: string, encryptedColumns: string[]  = []) {
     super()
@@ -56,7 +57,10 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     this.tablesRelations.push(tableTwoRepository.tableName)
 
     // push the foreign key
-    this.foreignKey.push(table.foreignKey);
+    this.foreignKeys.push(table.foreignKey);
+
+    // push the foreign key
+    this.tableKeys.push(table.tableKey ?? 'id');
      
     // sql BuiltQuery for this 
     let sql : BuiltQuery = 
@@ -302,7 +306,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
           let element = responseOne[index];
 
           // check all child that belong to the parent
-          element[this.tablesRelations[0]] = responseTwo.filter((item) => element.id == item[this.foreignKey[0]]);
+          element[this.tablesRelations[0]] = responseTwo.filter((item) => element[this.tableKeys[0]] == item[this.foreignKeys[0]]);
           // add the parent in the list
           data.push(element);
           
