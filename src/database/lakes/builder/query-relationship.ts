@@ -22,6 +22,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   private tablesRelations: string[] = [];
   private foreignKeys: string[] = [];
   private tableKeys: string[] = [];
+  private targets: any[] = [];
 
   constructor(table: string, encryptedColumns: string[]  = []) {
     super()
@@ -49,9 +50,14 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
 //   }
 
   // selete also  only this table
-  withOnly(table: belongsTo):this{
+  withOnly(table: belongsTo<any>):this{
 
     const tableTwoRepository: any =  table.targetModel;
+
+    // related rows are attached under the table name: a second relation to the same table would replace the first
+    if (this.tablesRelations.includes(tableTwoRepository.tableName)) {
+      throw new Error(`withOnly() already loads ${tableTwoRepository.tableName}: one relation per related table`);
+    }
 
     // push the relation table
     this.tablesRelations.push(tableTwoRepository.tableName)
@@ -61,6 +67,9 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
 
     // push the foreign key
     this.tableKeys.push(table.tableKey ?? 'id');
+
+    // keep the related model: it loads its own rows
+    this.targets.push(tableTwoRepository);
      
     // sql BuiltQuery for this 
     let sql : BuiltQuery = 
@@ -264,59 +273,44 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   {
     const queries =  this.build();
 
-    try {
+    let responseOne: any[]  = await this.camelizeList(await  this.execute(queries[0]));
 
-        let responseOne: any[]  = await this.camelizeList(await  this.execute(queries[0]));
-
-        // Use the map() method to iterate over the list and return a new array of just the IDs.
-        const idsList: number[] = responseOne.map(item => item.id);
-        // set the queries
-        let sqlValue : string = '';
-
-        // get the last element index
-        const lastValue : number = idsList.length - 1;
-
-        // loop into the values and builder the whereIn sql
-        for (let index = 0; index < idsList.length; index++) {
-          const element = idsList[index];
-          // check if is last element
-          if(lastValue == index){
-            //without comment if it is the last element
-            sqlValue += `$${index + 1 } `;
-            continue;
-          }
-          // set the 
-          sqlValue += `$${index + 1 } , `;
-        }
-
-        // set the whenIn query
-        const query : BuiltQuery = {
-            sql: queries[1].sql + `( ${sqlValue} )`,
-            params: idsList
-        }
-        // execute the sql
-        let responseTwo: any[] = await this.camelizeList(await this.execute(query));
-
-        // initial complex variable
-        let data: any[] = []; 
-        // loop in the parent and set child
-        for (let index = 0; index < responseOne.length; index++) {
-          
-          // get the parent element
-          let element = responseOne[index];
-
-          // check all child that belong to the parent
-          element[this.tablesRelations[0]] = responseTwo.filter((item) => element[this.tableKeys[0]] == item[this.foreignKeys[0]]);
-          // add the parent in the list
-          data.push(element);
-          
-        }
-
-        return data;
-
-    } catch (error) {
-
-        console.log(error);
+    // no relation asked or no parent found: nothing to attach
+    if (this.targets.length === 0 || responseOne.length === 0) {
+      return responseOne;
     }
+
+    // loop in the relations
+    for (let relation = 0; relation < this.targets.length; relation++) {
+
+      const foreignKey: string = this.foreignKeys[relation];
+
+      // the column of this table the foreign key points at: id unless tableKey says otherwise
+      const tableKey: string = this.tableKeys[relation];
+
+      // Use the map() method to iterate over the list and return a new array of just the keys.
+      const keysList: unknown[] = responseOne.map(item => item[tableKey]);
+
+      if (keysList.some(key => key === undefined)) {
+        throw new Error(`withOnly() needs the ${tableKey} column of the parent table to be selected`);
+      }
+
+      // the related model loads its own rows, with its own column casing and decryption
+      const responseTwo: any[] = await this.targets[relation].fromQuery()
+        .whereIn(this.camelToSnakeCase(foreignKey), keysList)
+        .get();
+
+      // loop in the parent and set child
+      for (let index = 0; index < responseOne.length; index++) {
+
+        // get the parent element
+        let element = responseOne[index];
+
+        // check all child that belong to the parent
+        element[this.tablesRelations[relation]] = responseTwo.filter((item) => element[tableKey] == item[foreignKey]);
+      }
+    }
+
+    return responseOne;
   }
 }
