@@ -89,6 +89,7 @@ bun add  @blm/lakeorm
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Set connection to Postgres |
+| `APP_KEY` | Key for encrypted columns: 32 random bytes, base64-encoded (`openssl rand -base64 32`). Set it in production, before storing encrypted data. Without it a built-in key is used, which is public. Values stored with the built-in key stay readable after `APP_KEY` is set, and are encrypted with `APP_KEY` when they are written again |
 
 Full variable reference: [.env.example](.env.example)
 
@@ -471,6 +472,8 @@ Example of relationship
 // Run your schema changes here
 
 // src/database/lakes/tables/user.ts
+
+import type { belongsTo } from "@blm/lakeorm";
 
 /*
 * User Table 

@@ -65,7 +65,7 @@ import type { WhereCondition } from "../interfaces/structure";
     *  Select from table with belongs tables
     **/
     fromWithBuilder(): QueryWithBuilder<T> {
-      return new QueryWithBuilder<T>(this.tableName);
+      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns);
     }
     
     /**
@@ -157,7 +157,6 @@ import type { WhereCondition } from "../interfaces/structure";
         // Leverage the query builder under the hood
         const row: any = await this.fromQuery()
         .select(...fieldsToSelect)
-        .selectAll()
         .whereEquals(field, value)
         .find();
 
