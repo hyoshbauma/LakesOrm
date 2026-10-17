@@ -1,4 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { BaseModel } from "../src/database/lakes/models/model";
 import { CryptoAes256C } from "../src/database/lakes/tools/crypto";
 import type { ColumnNames } from "../src/database/lakes/types/type-db";
@@ -261,4 +262,63 @@ test("a model that does not opt in behaves exactly as before", async () => {
 
   const { builder } = fake(new PlainTable().fromQuery(), () => [{ id: 5, name: "a" }]);
   expect(await builder.get()).toEqual([{ id: 5, name: "a" }]);
+});
+
+// ---------- the cipher is pinned ----------
+
+test("a known id encrypts to a known value, through APP_KEY and the model", () => {
+  // changing the key handling or the cipher would make every stored id unreadable
+  const known = "u-xn5Fix58TCTFuJds1JiE_r";
+
+  expect(new CryptoAes256C(KEY_BYTES).encryptDeterministic("42")).toBe(known);
+  expect(new UserTable().fromQuery().where("id", "=", "42").build().params).toEqual([known]);
+});
+
+test("different ids get different IVs, and the IV is keyed", () => {
+  const ivOf = (id: string) => Buffer.from(enc(id), "base64url").subarray(0, 16).toString("hex");
+  const ivs = new Set(Array.from({ length: 200 }, (_, n) => ivOf(`id-${n}`)));
+
+  expect(ivs.size).toBe(200);
+  // an unkeyed hash of the id would let anyone test a guessed id against the stored value
+  expect(ivOf("42")).not.toBe(createHash("sha256").update("42").digest().subarray(0, 16).toString("hex"));
+});
+
+// ---------- every path that compares or returns ids ----------
+
+test("the relationship builder encrypts the ids it compares", () => {
+  const [built] = new UserTable().fromWithBuilder().where("id", "=", "user-1").whereIn("id", ["user-2"]).build();
+
+  expect(built!.params).toEqual([enc("user-1"), enc("user-2")]);
+});
+
+test("a join compares this table's id written with its table name", () => {
+  const join = (new UserTable().selectJoinQuery() as any).innerJoin("order", "id", "userId");
+
+  expect(join.where("users.id", "=", "user-1").whereIn("users.id", ["user-2"]).build().params).toEqual([enc("user-1"), enc("user-2")]);
+  expect(() => (new UserTable().selectJoinQuery() as any).where("users.id", ">", "user-1")).toThrow("encrypted id");
+});
+
+test("!= compares against the encrypted value too", () => {
+  expect(new UserTable().fromQuery().where("id", "!=", "user-1").build().params).toEqual([enc("user-1")]);
+});
+
+test("upsert encrypts the id and the foreign keys of its rows", () => {
+  const built = new OrderTable().upsetQuery().values([{ id: "order-1", userId: "user-1", total: 5 }]).conflictOn("id").build();
+
+  expect(built.params).toEqual([enc("order-1"), enc("user-1"), 5]);
+});
+
+test("bulk insert, update and upsert return their rows decrypted", async () => {
+  const row = () => [{ id: enc("order-1"), user_id: enc("user-1"), total: 5 }];
+  const decrypted = [{ id: "order-1", userId: "user-1", total: 5 }];
+
+  expect(await fake(new OrderTable().insertQuery().values([{ userId: "user-1", total: 5 }]), row).builder.save()).toEqual(decrypted);
+  expect(await fake(new OrderTable().updateQuery().set("total", 5).where("id", "=", "order-1"), row).builder.save()).toEqual(decrypted);
+  expect(await fake(new OrderTable().upsetQuery().values([{ id: "order-1", userId: "user-1", total: 5 }]).conflictOn("id"), row).builder.save()).toEqual(decrypted);
+});
+
+test("a value that cannot be a ciphertext, such as a joined table's numeric id, is returned as it is", async () => {
+  const { builder } = fake(new UserTable().fromQuery(), () => [{ id: 7, first_name: "John" }]);
+
+  expect(await builder.get()).toEqual([{ id: 7, firstName: "John" }]);
 });

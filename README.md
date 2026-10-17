@@ -559,7 +559,7 @@ console.log(usersOrder[0]);
 
 ## Encrypted ids
 
-A model can ask for its id to be stored encrypted. The database then only ever holds ciphertext, while your code keeps working with the real id. `APP_KEY` must be set.
+A model can ask for its id to be stored encrypted. The database then only ever holds ciphertext, while your code keeps working with the real id. `APP_KEY` must be set (32 random bytes, base64-encoded): encrypted ids never use the built-in key, which is public.
 
 List the id in `encryptedIds`, together with any foreign key that points at an encrypted id:
 
@@ -627,10 +627,11 @@ const insertOrder: BuiltQuery = orderTable.createQuery().values({ userId: id, to
 
 What to know:
 
-- The same id always encrypts to the same value. That is what keeps lookups, joins and foreign keys working. Someone reading the database can see which rows share an id, but not the id itself.
+- The same id always encrypts to the same value. That is what keeps lookups, joins and foreign keys working. Someone reading the database can see which rows share an id, and how long the id is, but not the id itself. The UUIDs that the ORM generates all have the same length.
 - Only `=`, `!=` and `whereIn` work on an encrypted id. `>`, `<` and `LIKE` throw, and ordering by it is meaningless: order by `createdAt`.
 - `APP_KEY` cannot be changed afterwards without encrypting every id, and every foreign key that holds one, again.
 - It is for new tables. A table that already has rows with numeric ids cannot simply be switched.
 - `getRows()`, and rows returned by `c.query()` in a transaction, are not decrypted.
-- A join decrypts only the columns that the model starting the query lists in `encryptedIds`.
+- A join decrypts only the columns that the model starting the query lists in `encryptedIds`. To filter a join by that model's id, name the table: `where('users.id', '=', id)`, since `id` alone is ambiguous. A filter on an encrypted id of the joined table is not encrypted: filter through that table's own model instead.
+- Without `select()`, a join returns the starting table's `id`, `created_at` and `updated_at`; the joined table's columns of the same name are not returned. Select explicit columns when you need them.
 - Do not list a column in both `encryptedIds` and `encryptedColumns`.

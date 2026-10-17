@@ -324,7 +324,8 @@ export class Database {
         return this;
     }
 
-    // the built-in key is public: an id encrypted with it would not be protected
+    // the built-in key is public: an id encrypted with it would not be protected.
+    // Ids use the validated APP_KEY only, never the built-in key that old encrypted columns fall back to
     private idCipher(): CryptoAes256C
     {
         if (!process.env.APP_KEY) {
@@ -340,21 +341,31 @@ export class Database {
         return value == null ? value : this.idCipher().encryptDeterministic(String(value));
     }
 
+    // a ciphertext is always a string: anything else, such as the plain numeric id of a
+    // joined table that took the id column's place in a SELECT *, is left as it is
     protected decryptId(value: any): any
     {
-        return value == null ? value : this.idCipher().decryptDeterministic(value);
+        return typeof value === 'string' ? this.idCipher().decryptDeterministic(value) : value;
     }
 
     // a value compared with an encrypted id has to be encrypted the same way
     protected idParam(column: string, value: any, operator: string = '='): any
     {
-        if (!this.encryptedIds.includes(this.camelToSnakeCase(column))) return value;
+        if (!this.encryptedIds.includes(this.camelToSnakeCase(this.ownColumn(column)))) return value;
 
         if (operator !== '=' && operator !== '!=') {
             throw new Error(`LakesORM: '${operator}' cannot be used on '${column}', an encrypted id only supports =, != and whereIn`);
         }
 
         return this.encryptId(value);
+    }
+
+    // a column can be written with this table's name in front, as a join needs (users.id)
+    private ownColumn(column: string): string
+    {
+        const tableName = (this as { tableName?: string }).tableName;
+
+        return tableName && column.startsWith(`${tableName}.`) ? column.slice(tableName.length + 1) : column;
     }
 
     protected newId(): string
