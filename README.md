@@ -101,7 +101,7 @@ Before runing any commands, please add this to your
 // Then add the dev command to your existing package.json.
 {
   "scripts": {
-    "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
+    "lakes": "bun run ./src/database/lakes/ctl.ts"
     }
 }
 ```
