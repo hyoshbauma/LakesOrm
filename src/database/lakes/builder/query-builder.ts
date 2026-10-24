@@ -48,6 +48,7 @@ export class QueryBuilder<T extends object, S extends object = DatabaseSchema> e
     operator: ValueOperator,
     value: ColumnType<T, K>
   ): this;
+  
   where<K extends ColumnNames<T>>(
     column: K,
     operator: Operator,

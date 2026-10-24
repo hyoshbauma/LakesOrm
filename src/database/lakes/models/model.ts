@@ -1,6 +1,6 @@
 import { Injectable, Singleton } from "../../../../container";
 import type { AbstractTableSchema } from "../abstracts/tables";
-import { CreateBuilder, DeleteQueryBuilder, InsertBuilder, UpdateBuilder, UpdateSelectBuilder, UpsertQueryBuilder } from "../builder/query-mutations";
+import { CreateBuilder, DeleteQueryBuilder, InsertBuilder, InsertSelectBuilder, UpdateBuilder, UpdateSelectBuilder, UpsertQueryBuilder } from "../builder/query-mutations";
 import { QueryBuilder } from "../builder/query-builder";
 import { JoinableQueryBuilder } from "../builder/query-joins";
 import { QueryWithBuilder } from "../builder/query-relationship";
@@ -108,6 +108,13 @@ import type { WhereCondition } from "../interfaces/structure";
     **/
     updateSelectQuery(): UpdateSelectBuilder {
       return new UpdateSelectBuilder(this.tableName, this.encryptedColumns);
+    }
+
+    /**
+    *  insert select in to the table
+    **/
+    insertSelectQuery(): InsertSelectBuilder<T> {
+      return new InsertSelectBuilder(this.tableName, this.encryptedColumns);
     }
 
     // Wrapped find method that returns rich instances

@@ -131,39 +131,39 @@ export class Database {
     }
 
     protected camelToSnakeCase(str: string): string {
-            return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+        return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
     }
 
     protected camelToSnakeCaseList(str: string[]): string[] {
 
-            let listString : string[] = [];
+        let listString : string[] = [];
 
-            for (let index = 0; index < str.length; index++) {
+        for (let index = 0; index < str.length; index++) {
 
-                const element:string = str[index]!;
+            const element:string = str[index]!;
 
-                listString.push(this.camelToSnakeCase(element));
+            listString.push(this.camelToSnakeCase(element));
                 
-            }
-            return listString;
+        }
+        return listString;
     }
 
     protected convertKeysToSnakeCase(obj: Record<string, any>): any {
-            //
-            const result: Record<string, any> = {};
+        //
+        const result: Record<string, any> = {};
 
-            for (const key of Object.keys(obj)) {
-                const snakeKey = this.camelToSnakeCase(key);
+        for (const key of Object.keys(obj)) {
+            const snakeKey = this.camelToSnakeCase(key);
 
-                if(this.encryptedColumns.includes(key))
-                {
-                    result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
-                    continue;
-                }
-                
-                result[snakeKey] = obj[key];
+            if(this.encryptedColumns.includes(key))
+            {
+                result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
+                continue;
             }
-            return result;
+                
+            result[snakeKey] = obj[key];
+        }
+        return result;
     }
 
 
