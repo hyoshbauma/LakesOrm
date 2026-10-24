@@ -574,6 +574,7 @@ const insertSelect = await  orderTable.insertSelectQuery()
 
 consol.log(insertSelect)
 ```
+
 Result of the Insert Select Consol Log
 
 ```bash

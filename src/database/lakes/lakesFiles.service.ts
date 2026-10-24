@@ -128,6 +128,7 @@ export interface belongsTo<T extends object = DatabaseSchema> {
   foreignKey: ColumnNames<T>;    // The actual database foreign key column name
   isInverse?: boolean;    // True if this relationship is the "many" side of a 1:N link
   targetModel : Object;    // The name/class of the related model
+  tableKey?: string;
 }
 
 
