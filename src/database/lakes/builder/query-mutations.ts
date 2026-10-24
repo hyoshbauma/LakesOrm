@@ -1,4 +1,4 @@
-import type { BuiltQuery, WhereCondition } from "../interfaces/structure";
+import type { BuiltQuery, UpdateJoinParams, UpdateSet, WhereCondition } from "../interfaces/structure";
 import type { CamelizeKeys } from "../types/type-case";
 import type { ColumnNames, ValueOperator } from "../types/type-db";
 import { Database } from "./database";
@@ -352,6 +352,134 @@ export class DeleteQueryBuilder<T> extends Database {
     return 1; // Return number of affected rows
   }
 }
+
+
+
+
+export class UpdateSelectBuilder extends Database {
+    
+  private query: UpdateJoinParams | null = null;
+
+  private tableName: string;
+
+  constructor(table: string, encryptedColumns :string[]) {
+    super();
+    this.tableName = table;
+    this.encryptedColumns = encryptedColumns.map( columnKey => this.camelToSnakeCase(columnKey));
+
+    // start a query
+    this.query = {
+        updates: {},
+        join: {
+            targetTable: this.tableName,
+            sourceTable: '', // Must be set later
+            onCondition: '', // Must be set later
+            sourceField: '', // Must be set later
+          }
+    };
+  }
+
+  /**
+  * Initializes the builder for an UPDATE operation.
+  * param tableName The primary table to be updated (e.g., 'users').
+  */
+  // public update(): this {
+    
+  //   return this;
+  // }
+
+    /**
+     * Specifies the source table and the join criteria.
+     */
+    public joinFrom(
+        sourceTable: string,
+        onCondition: string,
+        sourceField: string
+    ): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.join.sourceTable = sourceTable;
+        this.query.join.onCondition = onCondition;
+        this.query.join.sourceField = sourceField;
+        return this;
+    }
+
+    /**
+     * Defines which columns and values should be updated in the target table.
+     */
+    public set(updates: UpdateSet): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.updates = updates;
+        return this;
+    }
+
+    /**
+     * Adds a standard WHERE clause (optional).
+     */
+    public where(condition: string): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.where = condition;
+        return this;
+    }
+
+    // wheres<K extends keyof T & string>(
+    //   column: K,
+    //   operator: ValueOperator,
+    //   value: T[K]
+    // ): this {
+    //   this.conditions.push({ column, operator, value });
+    //   return this;
+    // }
+
+    /**
+     * Constructs the final SQL query and returns the parameters.
+     */
+    public build(): BuiltQuery {
+        if (!this.query) {
+            throw new Error("Query configuration is incomplete. Call .update() first.");
+        }
+
+        const { updates, join } = this.query;
+
+        // 1. Construct the SET clause using the join logic
+        const setClauses: string[] = [];
+        
+        // Example: SET column1 = source.column2, column3 = source.column4
+        for (const targetCol in updates) {
+            const sourceValue = `${join.sourceTable}.${join.sourceField}`;
+            setClauses.push(`${targetCol} = ${sourceValue}`);
+        }
+
+        const setSql = setClauses.join(', ');
+
+        // 2. Construct the full UPDATE query
+        const sql = `UPDATE ${join.targetTable} SET ${setSql} WHERE 1=1`; // Start with WHERE 1=1 for cleaner joins
+
+        // 3. Collect parameters (for safe binding)
+        const params: any[] = [];
+        
+        // In a real implementation, we would use placeholders ($1, $2, etc.)
+        // Here we just collect the actual values for demonstration.
+        for (const key in updates) {
+            params.push(updates[key]);
+        }
+
+        // Note: For a production query builder, you would generate parameterized SQL
+        // like: UPDATE users SET status = audit_logs.status WHERE users.id = audit_logs.user_id
+        
+        return { sql, params };
+    }
+
+    // Execute the built query (mock execution step)
+  async save(): Promise<number> {
+    
+    const query =  this.build();
+
+    const data : any = await this.execute(query);
+
+    return 1; // Return number of affected rows
+  }
+}
+
 
 
 

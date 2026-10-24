@@ -117,7 +117,21 @@ export class LakesFilesService
 export type ColumnNames<T> = keyof T & string;
 
 // Helper type to get the value type of a specific column
-export type ColumnType<T, K extends keyof T> = T[K];`;
+export type ColumnType<T, K extends keyof T> = T[K];
+
+
+// Relationship
+export type RelationshipType = 'one' | 'many' | 'manyToMany';
+
+export interface belongsTo<T extends object = DatabaseSchema> {
+  type: RelationshipType; // e.g., 'one', 'many'
+  foreignKey: ColumnNames<T>;    // The actual database foreign key column name
+  isInverse?: boolean;    // True if this relationship is the "many" side of a 1:N link
+  targetModel : Object;    // The name/class of the related model
+}
+
+
+`;
 
 
         const schema: string = importBuilder +'\n'+ tableStringBuilder;
