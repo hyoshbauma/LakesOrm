@@ -107,7 +107,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     this.whereParams.push(this.params.length + 1);
     this.whereConditions.push({ column, operator, value });
     if (operator !== 'IS NULL' && operator !== 'IS NOT NULL') {
-      this.params.push(value);
+      this.params.push(this.idParam(column, value, operator));
     }
     return this;
   }
@@ -145,7 +145,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     );
 
      // global params
-    this.params.push(...values);
+    this.params.push(...values.map((value) => this.idParam(column, value)));
 
     return this;
   }
@@ -287,6 +287,27 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     const queries =  this.build();
 
     let responseOne: any[]  = await this.camelizeList(await  this.execute(queries[0]));
+
+    // no relation asked or no parent found: nothing to attach
+    if (this.targets.length === 0 || responseOne.length === 0) {
+      return responseOne;
+    }
+
+    // loop in the relations
+    for (let relation = 0; relation < this.targets.length; relation++) {
+
+      const foreignKey: string = this.foreignKeys[relation];
+
+      // the column of this table the foreign key points at: id unless tableKey says otherwise
+      const tableKey: string = this.tableKeys[relation];
+
+      // Use the map() method to iterate over the list and return a new array of just the keys.
+      const keysList: unknown[] = responseOne.map(item => item[tableKey]);
+
+      if (keysList.some(key => key === undefined)) {
+        throw new Error(`withOnly() needs the ${tableKey} column of the parent table to be selected`);
+      }
+
 
     // no relation asked or no parent found: nothing to attach
     if (this.targets.length === 0 || responseOne.length === 0) {

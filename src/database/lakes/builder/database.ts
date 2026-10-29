@@ -4,6 +4,7 @@ import type { CamelizeKeys } from '../types/type-case';
 import { CryptoAes256C } from '../tools/crypto';
 import type { BuiltQuery } from '../interfaces/structure';
 import type { LakesOrm } from '../interfaces/driver';
+import { randomUUID } from 'crypto';
 
 
 // connection to the db
@@ -173,7 +174,7 @@ export class Database {
 
 
     // Deep object transformer combining runtime and types
-    protected camelizeKeys<T>(obj: T): T {
+    protected camelizeKeys<T>(obj: T, nested: boolean = false): T {
         if (obj instanceof Date) {
             return obj as any;
         }
@@ -181,12 +182,20 @@ export class Database {
         //     return obj as any;
         // }
         if (Array.isArray(obj)) {
-            return obj.map((v) => this.camelizeKeys(v)) as any;
+            return obj.map((v) => this.camelizeKeys(v, nested)) as any;
         }
         if (obj !== null && typeof obj === 'object') {
             return Object.fromEntries(
             Object.entries(obj).map(([key, value]) =>
                 { 
+                    // encrypted ids are columns of the row itself, not keys inside a JSON value
+                    if(!nested && this.encryptedIds.includes(key)){
+                        return [
+                            key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
+                            this.decryptId(value),
+                        ];
+                    }
+
                     // // get the encrypted columns and decrypt them
                     if(this.encryptedColumns.includes(key)){
                         return [
@@ -199,7 +208,7 @@ export class Database {
                     // nothing to decrypte
                     return [
                         key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                        this.camelizeKeys(value),
+                        this.camelizeKeys(value, true),
                     ];
         
         })

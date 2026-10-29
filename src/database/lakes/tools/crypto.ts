@@ -39,6 +39,8 @@ export class CryptoAes256C {
 
     this.encryptionKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/key', 32));
     this.macKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/mac', 32));
+    this.deterministicKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/key', 32));
+    this.deterministicMacKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/mac', 32));
   }
 
   /**

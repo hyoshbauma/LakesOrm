@@ -32,6 +32,11 @@ export class CreateBuilder<T> extends Database {
   }
 
   build(): BuiltQuery {
+    // the database cannot generate an encrypted id: it is generated here, once
+    if (this.encryptedIds.includes('id') && (this.data as any).id == null) {
+      (this.data as any).id = this.encryptId(this.newId());
+    }
+
     const columns = Object.keys(this.data);
     const values = Object.values(this.data);
     const placeholders = columns.map((_, i) => `$${i + 1}`);
@@ -84,6 +89,8 @@ export class InsertBuilder<T> extends Database {
       throw new Error("No data provided for bulk insert");
     }
 
+    this.rows = this.withIds(this.rows);
+
     const keys = Object.keys(this.rows[0]!) as (keyof T)[];
     const valueClauses: string[] = [];
     const queryValues: any[] = [];
@@ -97,6 +104,12 @@ export class InsertBuilder<T> extends Database {
         rowClauses.push(`$${paramIndex++}`);
 
         const tablekey = key as string;
+
+        if(this.encryptedIds.includes(this.camelToSnakeCase(tablekey)))
+        {
+          queryValues.push(this.encryptId(row[key]));
+          continue;
+        }
 
         if(this.encryptedColumns.includes(this.camelToSnakeCase(tablekey)))
         {
@@ -148,6 +161,12 @@ export class UpdateBuilder<T> extends Database {
     //
     column = this.camelToSnakeCase(column as string) as K;
 
+    if(this.encryptedIds.includes(column as string))
+    {
+      this.updates[column] = this.encryptId(value) as T[K];
+      return this;
+    }
+
     if(this.encryptedColumns.includes(column as string))
     {
       this.updates[column] = this.dbEcncryption(value as string) as T[K];
@@ -185,7 +204,7 @@ export class UpdateBuilder<T> extends Database {
 
     // Build WHERE clause
     const whereClauses = this.conditions.map(c => {
-      params.push(c.value);
+      params.push(this.idParam(c.column, c.value, c.operator));
       return `${this.camelToSnakeCase(c.column)} ${c.operator} $${paramIndex++}`;
     });
 
@@ -251,6 +270,8 @@ export class UpsertQueryBuilder<T> extends Database{
       throw new Error("upsert needs conflictOn(...) columns");
     }
 
+    this.insertData = this.withIds(this.insertData);
+
     //
     const insertKeys = Object.keys(this.insertData[0]!);
     const params: any[] = [];
@@ -265,6 +286,12 @@ export class UpsertQueryBuilder<T> extends Database{
         rowParams.push(`$${paramIndex++}`);
 
         const tablekey = key as string;
+
+        if(this.encryptedIds.includes(this.camelToSnakeCase(tablekey)))
+          {
+            params.push(this.encryptId(row[key as ColumnNames<T>]));
+            continue;
+          }
 
         if(this.encryptedColumns.includes(this.camelToSnakeCase(tablekey)))
           {
@@ -345,7 +372,7 @@ export class DeleteQueryBuilder<T> extends Database {
 
     // Build WHERE clause
     const whereClauses = this.conditions.map(c => {
-      params.push(c.value);
+      params.push(this.idParam(c.column, c.value, c.operator));
       return `${this.camelToSnakeCase(c.column)} ${c.operator} $${paramIndex++}`;
     });
     
