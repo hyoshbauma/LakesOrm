@@ -573,12 +573,9 @@ const insertSelect = await  orderTable.insertSelectQuery()
             .save();
 
 consol.log(insertSelect)
-```
 
-Result of the Insert Select Consol Log
-
-```bash
-# result from logs
+// Result of the Insert Select Consol Log
+// result from logs
 {
   id: 4,
   quanty: 2,
