@@ -204,7 +204,7 @@ export class Database {
                     if(this.encryptedColumns.includes(key)){
                         return [
                             key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                            this.camelizeKeys(new CryptoAes256C(this.appKey).decrypt(value)),
+                            this.camelizeKeys(this.decryptValue(value)),
                         ];
                         
                     }
@@ -237,9 +237,84 @@ export class Database {
         return rows;
     }
 
+    // one cipher per key: deriving the key is slow, so it is done once
+    private static ciphers = new Map<string, CryptoAes256C>();
+    private static warnings = new Set<string>();
+
+    protected cipher(): CryptoAes256C
+    {
+        const appKey = process.env.APP_KEY;
+
+        if (!appKey) Database.warnOnce("LakesORM: APP_KEY is not set, encrypted columns use the built-in key, which is public");
+
+        return this.cipherFor(appKey || undefined);
+    }
+
+    // APP_KEY is the key itself: 32 random bytes, base64-encoded (openssl rand -base64 32).
+    // Without it, the built-in key keeps its original derivation, so values encrypted with it stay readable
+    private cipherFor(appKey?: string): CryptoAes256C
+    {
+        const key = appKey ?? this.appKey;
+
+        let cipher = Database.ciphers.get(key);
+
+        if (!cipher) {
+            cipher = new CryptoAes256C(appKey ? Database.appKeyBytes(appKey) : key);
+            Database.ciphers.set(key, cipher);
+        }
+
+        return cipher;
+    }
+
+    private static appKeyBytes(appKey: string): Buffer
+    {
+        const encoded = appKey.replace(/^base64:/, '');
+        const bytes = Buffer.from(encoded, 'base64');
+
+        // Buffer.from() skips characters that are not base64, so the encoding is checked by re-encoding
+        if (bytes.length !== 32 || bytes.toString('base64') !== encoded) {
+            throw new Error("LakesORM: APP_KEY must be 32 random bytes, base64-encoded (openssl rand -base64 32)");
+        }
+
+        return bytes;
+    }
+
+    // a value stored before APP_KEY was set is encrypted with the built-in key: it is still read,
+    // and is encrypted with APP_KEY the next time it is written
+    protected decryptValue(value: any): any
+    {
+        if (value == null || value === '') return value;
+
+        try {
+            return this.cipher().decrypt(value);
+        } catch (error) {
+            if (!process.env.APP_KEY) throw error;
+
+            let plain: string;
+            try {
+                plain = this.cipherFor(undefined).decrypt(value);
+            } catch {
+                throw error;
+            }
+
+            Database.warnOnce("LakesORM: a value encrypted with the built-in key was read; it is encrypted with APP_KEY when it is written again");
+            return plain;
+        }
+    }
+
+    private static warnOnce(message: string): void
+    {
+        if (Database.warnings.has(message)) return;
+
+        Database.warnings.add(message);
+        console.warn(message);
+    }
+
     protected dbEcncryption(value: string): string
     {
-        return new CryptoAes256C(this.appKey).encrypt(value);   
+        if (value == null) return value;
+
+        return this.cipher().encrypt(value);
     }
     
     
