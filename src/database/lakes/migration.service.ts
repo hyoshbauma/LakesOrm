@@ -80,6 +80,16 @@ export class MigrationService extends Database {
       
     }
 
+    // two migrations with the same name would be tracked as one
+    const names = new Set<string>();
+
+    for (const migration of migrationsAll) {
+      if (names.has(migration.name)) {
+        throw new Error(`Duplicate migration name: ${migration.name}`);
+      }
+      names.add(migration.name);
+    }
+
     return migrationsAll.sort((a, b) => a.timestamp - b.timestamp);
   }
 
@@ -88,7 +98,11 @@ export class MigrationService extends Database {
 
     migrationsPath = referencesPath = path.resolve(process.cwd(), migrationsPath);
 
-    const files = await readdir(migrationsPath);
+    // no migration folder yet means no migrations
+    const files = await readdir(migrationsPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return [] as string[];
+      throw error;
+    });
     const migrationFiles = files
       .filter((f) => f.endsWith('.ts') || f.endsWith('.js'))
       .sort();
@@ -107,11 +121,20 @@ export class MigrationService extends Database {
       // get the class and create an instance of the class
       const moduleClass = new module.Migration();
 
+      if (typeof moduleClass.up !== 'function' || typeof moduleClass.down !== 'function') {
+        throw new Error(`Migration ${file} must define up() and down()`);
+      }
+
+      // bound to the instance so that up() and down() can use this; toString() keeps
+      // returning the source, which the checksum is computed from
+      const bind = (method: Migration['up']): Migration['up'] =>
+        Object.assign(method.bind(moduleClass), { toString: () => method.toString() });
+
       migrations.push({
         name: moduleClass.name || path.basename(file, path.extname(file)),
         timestamp: moduleClass.timestamp || this.extractTimestamp(file),
-        up: moduleClass.up,
-        down: moduleClass.down,
+        up: bind(moduleClass.up),
+        down: bind(moduleClass.down),
       });
     }
 
@@ -137,6 +160,9 @@ export class MigrationService extends Database {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
+  // the id of the lock this run holds
+  private lockId?: string;
+
   // Acquire migration lock
   private async acquireLock(): Promise<boolean> {
     const lockId = `${process.pid}-${Date.now()}`;
@@ -148,26 +174,31 @@ export class MigrationService extends Database {
       RETURNING *
     `, [lockId]);
 
+    if (result.rowCount > 0) this.lockId = lockId;
+
     return result.rowCount > 0;
   }
 
-  // Release migration lock
+  // Release migration lock, unless another run took over the lock after it expired
   private async releaseLock(): Promise<void> {
     await this.lakesOrm.db.query(`
       UPDATE ${this.tableName}_lock
       SET locked_at = NULL, locked_by = NULL
-      WHERE id = 1
-    `);
+      WHERE id = 1 AND locked_by = $1
+    `, [this.lockId]);
+
+    this.lockId = undefined;
   }
 
   // Run pending migrations
   async up(options: { steps?: number } = {}): Promise<MigrationResult[]> {
     const client = await this.lakesOrm.db.connect();
     const results: MigrationResult[] = [];
+    let locked = false;
 
     try {
       // Acquire lock
-      const locked = await this.acquireLock();
+      locked = await this.acquireLock();
       if (!locked) {
         throw new Error('Could not acquire migration lock. Another migration may be running.');
       }
@@ -227,8 +258,12 @@ export class MigrationService extends Database {
 
       return results;
     } finally {
-      await this.releaseLock();
-      client.release();
+      // only the run that holds the lock may release it; the client is released even if unlocking fails
+      try {
+        if (locked) await this.releaseLock();
+      } finally {
+        client.release();
+      }
     }
   }
 
@@ -236,9 +271,10 @@ export class MigrationService extends Database {
   async down(options: { steps?: number } = {}): Promise<MigrationResult[]> {
     const client = await this.lakesOrm.db.connect();
     const results: MigrationResult[] = [];
+    let locked = false;
 
     try {
-      const locked = await this.acquireLock();
+      locked = await this.acquireLock();
       if (!locked) {
         throw new Error('Could not acquire migration lock.');
       }
@@ -306,8 +342,12 @@ export class MigrationService extends Database {
 
       return results;
     } finally {
-      await this.releaseLock();
-      client.release();
+      // only the run that holds the lock may release it; the client is released even if unlocking fails
+      try {
+        if (locked) await this.releaseLock();
+      } finally {
+        client.release();
+      }
     }
   }
 

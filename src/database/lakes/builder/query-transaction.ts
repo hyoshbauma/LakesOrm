@@ -29,7 +29,8 @@ export class TransactionBuilder extends Database {
      */
     async begin(): Promise<void>{
         this.isTransactionActive = true;
-        await this.getPoolClient();
+        // a second begin() keeps the client it already holds
+        if (!this.client) await this.getPoolClient();
     }
 
     /**
@@ -60,8 +61,10 @@ export class TransactionBuilder extends Database {
     public override async execute(): Promise<any> {
 
         let transactionSuccessful = false;
+        let failedRollback: Error | undefined;
 
-        this.client = await this.getPoolClient();
+        // reuse the client acquired by begin()
+        this.client = this.client ?? await this.getPoolClient();
         
         // 1. Start the transaction
         try {
@@ -93,19 +96,22 @@ export class TransactionBuilder extends Database {
             } catch (rollbackError) {
                 // Handle potential error during rollback (rare, but possible)
                 console.error("CRITICAL: Failed to rollback transaction:", rollbackError);
-            }
-
-            // 4. Release the client back to the pool
-            if (this.client) {
-                this.client.release();
-                console.log("Client released back to pool.");
+                failedRollback = rollbackError as Error;
             }
 
 
             console.error(`Transaction failed and was rolled back: ${error}`);
-            // throw new Error(`Transaction failed and was rolled back: ${error}`);
+            throw error;
 
         } finally {
+            // Release the client back to the pool
+            if (this.client) {
+                // a client whose ROLLBACK failed may still be inside the transaction:
+                // given the error, pg-pool destroys it instead of lending it again
+                this.client.release(failedRollback);
+                this.client = null;
+            }
+
             // Reset state regardless of success or failure
             this.isTransactionActive = false;
             this.operations = [];

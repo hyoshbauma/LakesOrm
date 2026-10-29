@@ -11,6 +11,7 @@ export * from './src/database/lakes/abstracts/migration.ts';
 export * from './src/database/lakes/models/model.ts';
 export * from './src/database/lakes/interfaces/driver.ts';
 export * from './src/database/lakes/interfaces/structure.ts';
+export * from './src/database/lakes/interfaces/belongto.ts';
 export * from './src/database/lakes/tools/tools.service.ts';
 export * from './src/database/lakes/lakes.provider.ts';
 export * from './src/database/lakes/lake.command.ts';

@@ -13,6 +13,12 @@ export class CryptoAes256C {
 
   private readonly algorithm = 'aes-256-cbc';
   private readonly key: Buffer;
+  // encrypt-then-MAC: a value is encrypted with one key and authenticated with another, both derived from the key above
+  private readonly encryptionKey: Buffer;
+  private readonly macKey: Buffer;
+  // keys for deterministic (searchable) encryption, derived from the key above
+  private readonly deterministicKey: Buffer;
+  private readonly deterministicMacKey: Buffer;
 
   /**
    * @param secretKey Must be exactly 32 bytes (256 bits)
@@ -33,6 +39,11 @@ export class CryptoAes256C {
     if (this.key.length !== 32) {
       throw new Error('Key must be exactly 32 bytes for AES-256-CBC.');
     }
+
+    this.encryptionKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/key', 32));
+    this.macKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/randomized/mac', 32));
+    this.deterministicKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/key', 32));
+    this.deterministicMacKey = Buffer.from(crypto.hkdfSync('sha256', this.key, Buffer.alloc(0), 'lakes-orm/deterministic/mac', 32));
   }
 
   /**
@@ -56,6 +67,7 @@ export class CryptoAes256C {
 
   /**
    * Generates a Hash-based Message Authentication Code (HMAC) using SHA-256.
+   * Only values written before encrypt-then-MAC carry this MAC, of the plaintext: decryptLegacy() checks it.
    * @param message - The plain text data to authenticate.
    * @param secretKey - The shared secret key known only to sender and receiver.
    * @returns The hex-encoded MAC string.
@@ -89,6 +101,14 @@ export class CryptoAes256C {
     return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
   }
 
+  /**
+   * The MAC of a value: an HMAC-SHA256 of its IV and its ciphertext (encrypt-then-MAC),
+   * so that a value is authenticated before it is decrypted.
+   */
+  protected ciphertextMAC(iv: Buffer, ciphertext: Buffer): Buffer {
+    return crypto.createHmac('sha256', this.macKey).update(iv).update(ciphertext).digest();
+  }
+
 
   /**
    * Encrypts plaintext data into hexadecimal format
@@ -97,13 +117,13 @@ export class CryptoAes256C {
     // Generate a fresh, random 16-byte Initialization Vector (IV) for every encryption
     const iv = crypto.randomBytes(16);
     
-    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
+    const cipher = crypto.createCipheriv(this.algorithm, this.encryptionKey, iv);
     
     let encrypted = cipher.update(plaintext, 'utf8', 'hex');
     encrypted += cipher.final('hex');
 
     // generate a ma
-    const encryptMac = this.generateMAC( plaintext, iv.toString('hex'));
+    const encryptMac = this.ciphertextMAC(iv, Buffer.from(encrypted, 'hex')).toString('hex');
 
 
     const encryptedData : EncryptionResult = {
@@ -136,19 +156,82 @@ export class CryptoAes256C {
     const ivHex = encrypted.iv;
     
     const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
-      
-    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+    const ciphertext = Buffer.from(encryptedData, 'hex');
 
+    // verifiying the mac, before anything is decrypted
+    const mac = Buffer.from(String(encrypted.mac), 'hex');
+    const expectedMac = this.ciphertextMAC(iv, ciphertext);
 
-    // verifiying the mac
-    if(!this.verifyMAC(decrypted, ivHex, encrypted.mac))
-    {
+    if (mac.length !== expectedMac.length || !crypto.timingSafeEqual(mac, expectedMac)) {
+      return this.decryptLegacy(encrypted);
+    }
+
+    const decipher = crypto.createDecipheriv(this.algorithm, this.encryptionKey, iv);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  }
+
+  /**
+   * Decrypts a value written before encrypt-then-MAC: it was encrypted with the key itself, and its MAC covers the plaintext.
+   * That MAC can only be checked after decrypting, so every failure gives the same error:
+   * a bad padding must not be told apart from a bad MAC.
+   */
+  private decryptLegacy(encrypted: EncryptionResult): string {
+    try {
+      const decipher = crypto.createDecipheriv(this.algorithm, this.key, Buffer.from(encrypted.iv, 'hex'));
+
+      let decrypted = decipher.update(encrypted.encryptedData, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+
+      if (this.verifyMAC(decrypted, encrypted.iv, encrypted.mac)) {
+        return decrypted;
+      }
+    } catch {
+      // reported below, as a MAC that does not match
+    }
+
+    throw new Error("MAC doesn't match the orignal value");
+  }
+
+  /**
+   * Encrypts a value that must stay searchable (an id for example), as SIV with a MAC:
+   * the MAC of the value is also the IV, so equal values always give equal ciphertexts
+   * and can be compared, joined and indexed. Result: base64url(MAC + ciphertext).
+   */
+  public encryptDeterministic(plaintext: string): string {
+    const data = Buffer.from(plaintext, 'utf8');
+    const mac = this.deterministicMAC(data);
+
+    const cipher = crypto.createCipheriv('aes-256-ctr', this.deterministicKey, mac);
+
+    return Buffer.concat([mac, cipher.update(data), cipher.final()]).toString('base64url');
+  }
+
+  /**
+   * Decrypts a value produced by encryptDeterministic, and returns it only if its MAC matches.
+   * CTR has no padding, so decrypting before the check reveals nothing.
+   */
+  public decryptDeterministic(encrypted: string): string {
+    const data = Buffer.from(String(encrypted), 'base64url');
+
+    // 16 bytes of MAC come before the ciphertext
+    if (data.length < 16) {
+      throw new Error("This is not a valid encrypted value");
+    }
+
+    const mac = data.subarray(0, 16);
+    const decipher = crypto.createDecipheriv('aes-256-ctr', this.deterministicKey, mac);
+    const decrypted = Buffer.concat([decipher.update(data.subarray(16)), decipher.final()]);
+
+    if (!crypto.timingSafeEqual(mac, this.deterministicMAC(decrypted))) {
       throw new Error("MAC doesn't match the orignal value");
     }
 
-    return decrypted;
+    return decrypted.toString('utf8');
+  }
+
+  // HMAC-SHA256 of the value, cut to 16 bytes: the IV of AES-256-CTR and the tag that authenticates the value
+  private deterministicMAC(data: Buffer): Buffer {
+    return crypto.createHmac('sha256', this.deterministicMacKey).update(data).digest().subarray(0, 16);
   }
 
 

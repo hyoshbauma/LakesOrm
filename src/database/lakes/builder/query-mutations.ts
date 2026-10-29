@@ -20,8 +20,7 @@ export class CreateBuilder<T> extends Database {
 
   // Set a column value with type safety
   set<K extends keyof T>(column: K, value: T[K]): this {
-    this.data[column] = value;
-    return this;
+    return this.values({ [column]: value } as unknown as Partial<T>);
   }
 
   // Set multiple values at once
@@ -33,6 +32,11 @@ export class CreateBuilder<T> extends Database {
   }
 
   build(): BuiltQuery {
+    // the database cannot generate an encrypted id: it is generated here, once
+    if (this.encryptedIds.includes('id') && (this.data as any).id == null) {
+      (this.data as any).id = this.encryptId(this.newId());
+    }
+
     const columns = Object.keys(this.data);
     const values = Object.values(this.data);
     const placeholders = columns.map((_, i) => `$${i + 1}`);
@@ -85,6 +89,8 @@ export class InsertBuilder<T> extends Database {
       throw new Error("No data provided for bulk insert");
     }
 
+    this.rows = this.withIds(this.rows);
+
     const keys = Object.keys(this.rows[0]!) as (keyof T)[];
     const valueClauses: string[] = [];
     const queryValues: any[] = [];
@@ -98,6 +104,12 @@ export class InsertBuilder<T> extends Database {
         rowClauses.push(`$${paramIndex++}`);
 
         const tablekey = key as string;
+
+        if(this.encryptedIds.includes(this.camelToSnakeCase(tablekey)))
+        {
+          queryValues.push(this.encryptId(row[key]));
+          continue;
+        }
 
         if(this.encryptedColumns.includes(this.camelToSnakeCase(tablekey)))
         {
@@ -149,6 +161,12 @@ export class UpdateBuilder<T> extends Database {
     //
     column = this.camelToSnakeCase(column as string) as K;
 
+    if(this.encryptedIds.includes(column as string))
+    {
+      this.updates[column] = this.encryptId(value) as T[K];
+      return this;
+    }
+
     if(this.encryptedColumns.includes(column as string))
     {
       this.updates[column] = this.dbEcncryption(value as string) as T[K];
@@ -180,10 +198,14 @@ export class UpdateBuilder<T> extends Database {
       paramIndex++;
     }
 
+    if (setClauses.length === 0) {
+      throw new Error("UpdateBuilder: call set() before save()");
+    }
+
     // Build WHERE clause
     const whereClauses = this.conditions.map(c => {
-      params.push(c.value);
-      return `${c.column} ${c.operator} $${paramIndex++}`;
+      params.push(this.idParam(c.column, c.value, c.operator));
+      return `${this.camelToSnakeCase(c.column)} ${c.operator} $${paramIndex++}`;
     });
 
     let sql = `UPDATE ${this.tableName} SET ${setClauses.join(', ')} , updated_at = NOW() `;
@@ -240,6 +262,16 @@ export class UpsertQueryBuilder<T> extends Database{
 
   // Compile the builder state into a parameterized SQL query
   public build(): BuiltQuery {
+    if (this.insertData.length === 0) {
+      throw new Error("No data provided for upsert");
+    }
+
+    if (this.conflictColumns.length === 0) {
+      throw new Error("upsert needs conflictOn(...) columns");
+    }
+
+    this.insertData = this.withIds(this.insertData);
+
     //
     const insertKeys = Object.keys(this.insertData[0]!);
     const params: any[] = [];
@@ -254,6 +286,12 @@ export class UpsertQueryBuilder<T> extends Database{
         rowParams.push(`$${paramIndex++}`);
 
         const tablekey = key as string;
+
+        if(this.encryptedIds.includes(this.camelToSnakeCase(tablekey)))
+          {
+            params.push(this.encryptId(row[key as ColumnNames<T>]));
+            continue;
+          }
 
         if(this.encryptedColumns.includes(this.camelToSnakeCase(tablekey)))
           {
@@ -270,16 +308,22 @@ export class UpsertQueryBuilder<T> extends Database{
     .map((k) => String(k)).join(", ");
     const conflictList = this.conflictColumns.map(c => `"${String(c)}"`).join(', ');
     
-    // Build DO UPDATE SET clause (using PostgreSQL EXCLUDED table pattern)
-    const updateList = this.updateColumns.length > 0
-      ? this.updateColumns.map((col) => `${String(col)} = EXCLUDED.${String(col)}`).join(", ")
-      : insertKeys.map((col) => `${String(col)} = EXCLUDED.${String(col)}`).join(", "); // default fallback update all
+    // Build DO UPDATE SET clause (using PostgreSQL EXCLUDED table pattern).
+    // Without doUpdateSet() every inserted column is updated except id, so the existing row keeps
+    // its primary key; updated_at is always set to NOW(), and only once
+    const updateColumns = this.updateColumns.length > 0
+      ? this.updateColumns.map((col) => String(col))
+      : insertKeys.map((col) => this.camelToSnakeCase(col)).filter((col) => col !== 'id'); // default fallback update all
+    const updateList = [
+      ...updateColumns.filter((col) => col !== 'updated_at').map((col) => `${col} = EXCLUDED.${col}`),
+      'updated_at = NOW()',
+    ].join(", ");
 
     const query : string = `
       INSERT INTO ${this.tableName} (${columnsList})
       VALUES ${valueClauses.join(", ")}
       ON CONFLICT (${conflictList})
-      DO UPDATE SET ${updateList} , updated_at = NOW() RETURNING *;
+      DO UPDATE SET ${updateList} RETURNING *;
     `.trim();
 
     return {
@@ -328,8 +372,8 @@ export class DeleteQueryBuilder<T> extends Database {
 
     // Build WHERE clause
     const whereClauses = this.conditions.map(c => {
-      params.push(c.value);
-      return `${c.column} ${c.operator} $${paramIndex++}`;
+      params.push(this.idParam(c.column, c.value, c.operator));
+      return `${this.camelToSnakeCase(c.column)} ${c.operator} $${paramIndex++}`;
     });
     
     this.parameters = params;
@@ -348,9 +392,9 @@ export class DeleteQueryBuilder<T> extends Database {
     
     const query =  this.build();
 
-    const data : any = await this.execute(query);
+    const result : any = await this.lakesOrm.db.query(query.sql, query.params);
 
-    return 1; // Return number of affected rows
+    return result.rowCount ?? 0; // Return number of affected rows
   }
 }
 

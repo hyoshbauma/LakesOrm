@@ -4,6 +4,7 @@ import type { CamelizeKeys } from '../types/type-case';
 import { CryptoAes256C } from '../tools/crypto';
 import type { BuiltQuery } from '../interfaces/structure';
 import type { LakesOrm } from '../interfaces/driver';
+import { randomUUID } from 'crypto';
 
 
 // connection to the db
@@ -12,8 +13,10 @@ export class Database {
 
     // Prostgres
     protected lakesOrm: LakesOrm;
-    // Prostgres
-    protected postgres?: Pool ;
+    // Prostgres: the shared pool, looked up on every use unless a pool was assigned
+    private postgresPool?: Pool;
+    protected get postgres(): Pool | undefined { return this.postgresPool ?? this.lakesOrm?.db ?? undefined; }
+    protected set postgres(pool: Pool | undefined) { this.postgresPool = pool; }
     // Mysql
     protected mysql?: Pool;
     // database driver
@@ -25,22 +28,34 @@ export class Database {
 
     constructor() {
         // database driver
-        this.driver = process.env.DB_CONNECTION!;
+        this.driver = process.env.DB_CONNECTION ?? 'pgsql';
+        // the database this builder talks to
+        this.connectionString = process.env.DATABASE_URL;
         // database connection
         this.lakesOrm = this.connectionDb(this.driver);
 
         this.appKey = "base64:P1G6tpneoQAlRZbZgdZ4on/8zMM+33JAtFT9VJn1Qc=";
     }
 
+    // one pool per DATABASE_URL, shared by every builder that uses it
+    private static pools = new Map<string | undefined, Pool>();
+
+    private connectionString?: string;
+
     /**
      *  Prostgres connection
      **/
     private postgresConnection() : Pool
     {
-        const connectionString: string = process.env.DATABASE_URL!;
-        this.postgres = new Pool({ connectionString });
+        let pool = Database.pools.get(this.connectionString);
 
-        return this.postgres;
+        // create the pool once, or again after it was ended
+        if (!pool || pool.ending) {
+            pool = new Pool({ connectionString: this.connectionString });
+            Database.pools.set(this.connectionString, pool);
+        }
+
+        return pool;
     }
 
     /**
@@ -70,12 +85,16 @@ export class Database {
      **/
     private connectionDb(driver : string): LakesOrm
     {
+        // the pool is looked up on every use, so a builder made before
+        // MigrationService.close() or before DATABASE_URL was set still works
+        const database = this;
+
         // connection to postgres
         if(driver == 'pgsql'){
             
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -83,7 +102,7 @@ export class Database {
         if(driver == 'mysql'){
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -99,35 +118,22 @@ export class Database {
 
     // Execute a query and return typed results
     protected async execute<T>(query: BuiltQuery): Promise<T[]> {
-        const result: QueryResult = await this.lakesOrm.db.query(
+        const result: QueryResult | QueryResult[] = await this.lakesOrm.db.query(
         query.sql,
         query.params
         );
 
-        try {
-            return result.rows;
+        // a multi-statement query (CREATE TABLE + CREATE INDEX) resolves to one result per statement
+        const last = Array.isArray(result) ? result[result.length - 1] : result;
 
-        } catch (error : any) {
-            console.log("Error : "+error.message);
-        }
-
-        return [];
+        return last?.rows ?? [];
     }
 
     // Execute and return single result
     protected async executeOne<T>(query: BuiltQuery): Promise<T | null> {
-        
-        try {
 
-            const results = await this.execute<T>(query);
-            return results[0] || null;
-
-        } catch (error:any) {
-
-            console.log("Error : "+ error.message);
-            
-            return null;
-        }
+        const results = await this.execute<T>(query);
+        return results[0] || null;
     }
 
     protected camelToSnakeCase(str: string): string {
@@ -155,9 +161,15 @@ export class Database {
         for (const key of Object.keys(obj)) {
             const snakeKey = this.camelToSnakeCase(key);
 
-            if(this.encryptedColumns.includes(key))
+            if(this.encryptedIds.includes(snakeKey))
             {
-                result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
+                result[snakeKey] = this.encryptId(obj[key]);
+                continue;
+            }
+
+            if(this.encryptedColumns.includes(snakeKey))
+            {
+                result[snakeKey] = this.dbEcncryption(obj[key]);
                 continue;
             }
                 
@@ -168,7 +180,7 @@ export class Database {
 
 
     // Deep object transformer combining runtime and types
-    protected camelizeKeys<T>(obj: T): T {
+    protected camelizeKeys<T>(obj: T, nested: boolean = false): T {
         if (obj instanceof Date) {
             return obj as any;
         }
@@ -176,17 +188,25 @@ export class Database {
         //     return obj as any;
         // }
         if (Array.isArray(obj)) {
-            return obj.map((v) => this.camelizeKeys(v)) as any;
+            return obj.map((v) => this.camelizeKeys(v, nested)) as any;
         }
         if (obj !== null && typeof obj === 'object') {
             return Object.fromEntries(
             Object.entries(obj).map(([key, value]) =>
                 { 
+                    // encrypted ids are columns of the row itself, not keys inside a JSON value
+                    if(!nested && this.encryptedIds.includes(key)){
+                        return [
+                            key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
+                            this.decryptId(value),
+                        ];
+                    }
+
                     // // get the encrypted columns and decrypt them
                     if(this.encryptedColumns.includes(key)){
                         return [
                             key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                            this.camelizeKeys(new CryptoAes256C(this.appKey).decrypt(value)),
+                            this.camelizeKeys(this.decryptValue(value)),
                         ];
                         
                     }
@@ -194,7 +214,7 @@ export class Database {
                     // nothing to decrypte
                     return [
                         key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                        this.camelizeKeys(value),
+                        this.camelizeKeys(value, true),
                     ];
         
         })
@@ -219,9 +239,151 @@ export class Database {
         return rows;
     }
 
+    // one cipher per key: deriving the key is slow, so it is done once
+    private static ciphers = new Map<string, CryptoAes256C>();
+    private static warnings = new Set<string>();
+
+    protected cipher(): CryptoAes256C
+    {
+        const appKey = process.env.APP_KEY;
+
+        if (!appKey) Database.warnOnce("LakesORM: APP_KEY is not set, encrypted columns use the built-in key, which is public");
+
+        return this.cipherFor(appKey || undefined);
+    }
+
+    // APP_KEY is the key itself: 32 random bytes, base64-encoded (openssl rand -base64 32).
+    // Without it, the built-in key keeps its original derivation, so values encrypted with it stay readable
+    private cipherFor(appKey?: string): CryptoAes256C
+    {
+        const key = appKey ?? this.appKey;
+
+        let cipher = Database.ciphers.get(key);
+
+        if (!cipher) {
+            cipher = new CryptoAes256C(appKey ? Database.appKeyBytes(appKey) : key);
+            Database.ciphers.set(key, cipher);
+        }
+
+        return cipher;
+    }
+
+    private static appKeyBytes(appKey: string): Buffer
+    {
+        const encoded = appKey.replace(/^base64:/, '');
+        const bytes = Buffer.from(encoded, 'base64');
+
+        // Buffer.from() skips characters that are not base64, so the encoding is checked by re-encoding
+        if (bytes.length !== 32 || bytes.toString('base64') !== encoded) {
+            throw new Error("LakesORM: APP_KEY must be 32 random bytes, base64-encoded (openssl rand -base64 32)");
+        }
+
+        return bytes;
+    }
+
+    // a value stored before APP_KEY was set is encrypted with the built-in key: it is still read,
+    // and is encrypted with APP_KEY the next time it is written
+    protected decryptValue(value: any): any
+    {
+        if (value == null || value === '') return value;
+
+        try {
+            return this.cipher().decrypt(value);
+        } catch (error) {
+            if (!process.env.APP_KEY) throw error;
+
+            let plain: string;
+            try {
+                plain = this.cipherFor(undefined).decrypt(value);
+            } catch {
+                throw error;
+            }
+
+            Database.warnOnce("LakesORM: a value encrypted with the built-in key was read; it is encrypted with APP_KEY when it is written again");
+            return plain;
+        }
+    }
+
+    private static warnOnce(message: string): void
+    {
+        if (Database.warnings.has(message)) return;
+
+        Database.warnings.add(message);
+        console.warn(message);
+    }
+
     protected dbEcncryption(value: string): string
     {
-        return new CryptoAes256C(this.appKey).encrypt(value);   
+        if (value == null) return value;
+
+        return this.cipher().encrypt(value);
+    }
+
+    // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
+    protected encryptedIds: string[] = [];
+
+    public withEncryptedIds(columns: string[]): this
+    {
+        this.encryptedIds = columns.map((column) => this.camelToSnakeCase(column));
+
+        return this;
+    }
+
+    // the built-in key is public: an id encrypted with it would not be protected.
+    // Ids use the validated APP_KEY only, never the built-in key that old encrypted columns fall back to
+    private idCipher(): CryptoAes256C
+    {
+        if (!process.env.APP_KEY) {
+            throw new Error("LakesORM: encrypted ids need APP_KEY to be set");
+        }
+
+        return this.cipher();
+    }
+
+    // equal ids give equal ciphertexts, so an encrypted id can still be compared and joined
+    protected encryptId(value: any): any
+    {
+        return value == null ? value : this.idCipher().encryptDeterministic(String(value));
+    }
+
+    // a ciphertext is always a string: anything else, such as the plain numeric id of a
+    // joined table that took the id column's place in a SELECT *, is left as it is
+    protected decryptId(value: any): any
+    {
+        return typeof value === 'string' ? this.idCipher().decryptDeterministic(value) : value;
+    }
+
+    // a value compared with an encrypted id has to be encrypted the same way
+    protected idParam(column: string, value: any, operator: string = '='): any
+    {
+        if (!this.encryptedIds.includes(this.camelToSnakeCase(this.ownColumn(column)))) return value;
+
+        if (operator !== '=' && operator !== '!=') {
+            throw new Error(`LakesORM: '${operator}' cannot be used on '${column}', an encrypted id only supports =, != and whereIn`);
+        }
+
+        return this.encryptId(value);
+    }
+
+    // a column can be written with this table's name in front, as a join needs (users.id)
+    private ownColumn(column: string): string
+    {
+        const tableName = (this as { tableName?: string }).tableName;
+
+        return tableName && column.startsWith(`${tableName}.`) ? column.slice(tableName.length + 1) : column;
+    }
+
+    protected newId(): string
+    {
+        return randomUUID();
+    }
+
+    // the database cannot generate an encrypted id: rows without one get a UUID
+    protected withIds<R>(rows: R[]): R[]
+    {
+        if (!this.encryptedIds.includes('id')) return rows;
+
+        return rows.map((row: any) => row.id == null ? { ...row, id: this.newId() } : row);
     }
     
     

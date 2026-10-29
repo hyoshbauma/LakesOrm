@@ -207,7 +207,7 @@ export class AlterTableBuilder<T extends object, S extends object = DatabaseSche
   public override build(): BuiltQuery {
 
     const columnAddDefs = this.columns.map(col => {
-      const parts = [`"${this.camelToSnakeCase(col.name)}"`, col.type];
+      const parts = [`ADD COLUMN "${this.camelToSnakeCase(col.name)}"`, col.type];
       
       if (col.primaryKey) parts.push('PRIMARY KEY');
       if (!col.nullable && !col.primaryKey) parts.push('NOT NULL');
@@ -221,6 +221,12 @@ export class AlterTableBuilder<T extends object, S extends object = DatabaseSche
         parts.push (sql)
       } 
       
+      // Generated column check
+      if(col.isGenerated !==undefined){
+        let sql: string = ` GENERATED ALWAYS AS (${col.isGenerated.expression}) `;
+        parts.push(sql)
+      }
+
       return parts.join(' ');
     });
 
@@ -229,10 +235,13 @@ export class AlterTableBuilder<T extends object, S extends object = DatabaseSche
       return parts.join(' ');
     });
 
-    const addKey : string = this.columns.length ? ' ADD ' : '';
+    const addKey : string = this.columns.length ? ' ' : '';
     const addComma : string = this.columnsDrop.length ?  (this.columns.length ?  ', \n' : ' ') : '';
 
-    let tableSql = `ALTER TABLE ${this.tableName}${addKey}${columnAddDefs.join(',\n')}${addComma}${columnDropDefs.join(',\n')};`.trim();
+    // nothing to add or drop: only the indexes are emitted
+    let tableSql = (this.columns.length || this.columnsDrop.length)
+      ? `ALTER TABLE ${this.tableName}${addKey}${columnAddDefs.join(',\n')}${addComma}${columnDropDefs.join(',\n')};`.trim()
+      : '';
 
     const indexSql = this.indexes.map(idx => {
       const cols = idx.columns.map(c => `"${c}"`).join(', ');
@@ -240,7 +249,7 @@ export class AlterTableBuilder<T extends object, S extends object = DatabaseSche
     }).join('\n');
 
     return {
-      sql: indexSql ? `${tableSql} \n ${indexSql}` : tableSql,
+      sql: indexSql ? `${tableSql} \n ${indexSql}`.trim() : tableSql,
       params: []
     };
   }

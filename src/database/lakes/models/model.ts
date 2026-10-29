@@ -20,6 +20,8 @@ import type { WhereCondition } from "../interfaces/structure";
     protected encryptedColumns: ColumnNames<T>[] = [];
     // column to hide
     protected hidden : ColumnNames<T>[] = [];
+    // id columns to store encrypted: the id, and foreign keys that point at an encrypted id
+    protected encryptedIds: ColumnNames<T>[] = [];
 
     constructor(tableName: string) {
       // set the table name
@@ -51,56 +53,56 @@ import type { WhereCondition } from "../interfaces/structure";
       * Create or Insert one value
      **/
     createQuery(): CreateBuilder<T> {
-      return new CreateBuilder<T>(this.tableName, this.encryptedColumns);
+      return new CreateBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
 
     /**
      * Select from table
     */
     fromQuery(): QueryBuilder<T> {
-      return new QueryBuilder<T>(this.tableName, this.encryptedColumns);
+      return new QueryBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
 
     /**
     *  Select from table with belongs tables
     **/
     fromWithBuilder(): QueryWithBuilder<T> {
-      return new QueryWithBuilder<T>(this.tableName);
+      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
     
     /**
      * Select Join from table
     */
     selectJoinQuery(): JoinableQueryBuilder<T> {
-      return new JoinableQueryBuilder<T>(this.tableName, this.encryptedColumns);
+      return new JoinableQueryBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
 
     /**
      *  Insert in to the table
      **/
     insertQuery(): InsertBuilder<T> {
-      return new InsertBuilder<T>(this.tableName, this.encryptedColumns);
+      return new InsertBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
     
     /**
      *  update in to the table
      **/
     updateQuery(): UpdateBuilder<T> {
-      return new UpdateBuilder<T>(this.tableName, this.encryptedColumns);
+      return new UpdateBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
 
     /**
     *  up set in to the table
     **/
     upsetQuery(): UpsertQueryBuilder<T> {
-      return new UpsertQueryBuilder<T>(this.tableName, this.encryptedColumns);
+      return new UpsertQueryBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
 
     /**
     *  up set in to the table
     **/
     deleteQuery(): DeleteQueryBuilder<T> {
-      return new DeleteQueryBuilder<T>(this.tableName);
+      return new DeleteQueryBuilder<T>(this.tableName).withEncryptedIds(this.encryptedIds);
     }
 
     /**
@@ -171,7 +173,6 @@ import type { WhereCondition } from "../interfaces/structure";
         // Leverage the query builder under the hood
         const row: any = await this.fromQuery()
         .select(...fieldsToSelect)
-        .selectAll()
         .whereEquals(field, value)
         .find();
 

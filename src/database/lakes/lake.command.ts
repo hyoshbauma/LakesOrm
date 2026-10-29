@@ -64,14 +64,14 @@ export class LakesCtlFacade
     async createTableFiles(tableName :string)
     {
         // create the table files
-        this.lakesFilesService.createTableFiles(tableName);
+        await this.lakesFilesService.createTableFiles(tableName);
 
     }
 
     async deleteTableFiles(tableName :string)
     {
         // create the table files
-        this.lakesFilesService.deteleTableFiles(tableName);
+        await this.lakesFilesService.deteleTableFiles(tableName);
 
     }
 }
