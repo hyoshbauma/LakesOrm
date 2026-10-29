@@ -117,35 +117,22 @@ export class Database {
 
     // Execute a query and return typed results
     protected async execute<T>(query: BuiltQuery): Promise<T[]> {
-        const result: QueryResult = await this.lakesOrm.db.query(
+        const result: QueryResult | QueryResult[] = await this.lakesOrm.db.query(
         query.sql,
         query.params
         );
 
-        try {
-            return result.rows;
+        // a multi-statement query (CREATE TABLE + CREATE INDEX) resolves to one result per statement
+        const last = Array.isArray(result) ? result[result.length - 1] : result;
 
-        } catch (error : any) {
-            console.log("Error : "+error.message);
-        }
-
-        return [];
+        return last?.rows ?? [];
     }
 
     // Execute and return single result
     protected async executeOne<T>(query: BuiltQuery): Promise<T | null> {
-        
-        try {
 
-            const results = await this.execute<T>(query);
-            return results[0] || null;
-
-        } catch (error:any) {
-
-            console.log("Error : "+ error.message);
-            
-            return null;
-        }
+        const results = await this.execute<T>(query);
+        return results[0] || null;
     }
 
     protected camelToSnakeCase(str: string): string {
