@@ -18,6 +18,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   private offsetValue: number | null = null;
   private params: unknown[] = [];
   private conditions: string[] = [];
+  private whereParams: number[] = [];
   private queries: BuiltQuery[] = [];
   private tablesRelations: string[] = [];
   private relationshipType: string[] = [];
@@ -102,6 +103,8 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     operator: Operator,
     value?: ColumnType<T, K>
   ): this {
+    // the placeholder this condition will use
+    this.whereParams.push(this.params.length + 1);
     this.whereConditions.push({ column, operator, value });
     if (operator !== 'IS NULL' && operator !== 'IS NOT NULL') {
       this.params.push(value);
@@ -110,6 +113,12 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   }
 
   whereIn<K extends ColumnNames<T>>(column: K, values: ColumnType<T, K>[]):this{
+    // an empty list matches nothing
+    if (values.length === 0) {
+      this.conditions.push('FALSE');
+      return this;
+    }
+
     // in operator
     const paramKey = this.params.length+1;
 
@@ -132,7 +141,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
 
     // Converts columns values
     this.conditions.push(
-      `${column} IN ( ${sqlValue} )`
+      `${this.camelToSnakeCase(column)} IN ( ${sqlValue} )`
     );
 
      // global params
@@ -146,7 +155,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     const paramKey = `$${this.params.length+1}`;
     // Converts path like "metadata" and checks containment
     this.conditions.push(
-      `${path} @> ${paramKey}::jsonb`
+      `${this.camelToSnakeCase(path)} @> ${paramKey}::jsonb`
     );
     this.params.push(JSON.stringify(value));
     return this;
@@ -158,7 +167,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
     const accessor = jsonPath.reduce((acc, key, idx) => {
       const op = idx === jsonPath.length - 1 ? '->>' : '->';
       return `${acc} ${op} '${key}'`;
-    }, column);
+    }, this.camelToSnakeCase(column));
 
     this.conditions.push(`${accessor} = ${paramKey}`);
     this.params.push(value);
@@ -224,7 +233,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
           return `${c.column} ${c.operator}`;
         }
 
-        return `${c.column} ${c.operator} $${i + 1}`;
+        return `${c.column} ${c.operator} $${this.whereParams[i]}`;
       });
 
       parts.push(` WHERE ${conditions.join(' AND ')}`);
