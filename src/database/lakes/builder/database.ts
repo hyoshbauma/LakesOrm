@@ -26,6 +26,12 @@ export class Database {
 
     protected encryptedColumns: string[] = [];
 
+    // one cipher per key: deriving the key is slow, so it is done once
+    private static ciphers = new Map<string, CryptoAes256C>();
+    private static warnings = new Set<string>();
+     // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
+    protected encryptedIds: string[] = [];
+
     constructor() {
         // database driver
         this.driver = process.env.DB_CONNECTION ?? 'pgsql';
@@ -239,10 +245,6 @@ export class Database {
         return rows;
     }
 
-    // one cipher per key: deriving the key is slow, so it is done once
-    private static ciphers = new Map<string, CryptoAes256C>();
-    private static warnings = new Set<string>();
-
     protected cipher(): CryptoAes256C
     {
         const appKey = process.env.APP_KEY;
@@ -318,9 +320,6 @@ export class Database {
 
         return this.cipher().encrypt(value);
     }
-
-    // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
-    protected encryptedIds: string[] = [];
 
     public withEncryptedIds(columns: string[]): this
     {
