@@ -67,7 +67,7 @@ import type { WhereCondition } from "../interfaces/structure";
     *  Select from table with belongs tables
     **/
     fromWithBuilder(): QueryWithBuilder<T> {
-      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns);
+      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
     }
     
     /**

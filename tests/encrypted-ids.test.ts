@@ -213,7 +213,7 @@ test("relationship loading works across encrypted ids", async () => {
     }
   }
 
-  const relation: any = { targetModel: new Orders(), foreignKey: "userId", type: "one" };
+  const relation: any = { targetModel: new Orders(), foreignKey: "userId", type: "many" };
   const { builder } = fake(new UserTable().fromWithBuilder().withOnly(relation), () => [
     { id: enc("user-1"), first_name: "John" },
     { id: enc("user-2"), first_name: "Linda" },

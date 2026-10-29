@@ -161,9 +161,15 @@ export class Database {
         for (const key of Object.keys(obj)) {
             const snakeKey = this.camelToSnakeCase(key);
 
-            if(this.encryptedColumns.includes(key))
+            if(this.encryptedIds.includes(snakeKey))
             {
-                result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
+                result[snakeKey] = this.encryptId(obj[key]);
+                continue;
+            }
+
+            if(this.encryptedColumns.includes(snakeKey))
+            {
+                result[snakeKey] = this.dbEcncryption(obj[key]);
                 continue;
             }
                 
@@ -311,6 +317,73 @@ export class Database {
         if (value == null) return value;
 
         return this.cipher().encrypt(value);
+    }
+
+    // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
+    protected encryptedIds: string[] = [];
+
+    public withEncryptedIds(columns: string[]): this
+    {
+        this.encryptedIds = columns.map((column) => this.camelToSnakeCase(column));
+
+        return this;
+    }
+
+    // the built-in key is public: an id encrypted with it would not be protected.
+    // Ids use the validated APP_KEY only, never the built-in key that old encrypted columns fall back to
+    private idCipher(): CryptoAes256C
+    {
+        if (!process.env.APP_KEY) {
+            throw new Error("LakesORM: encrypted ids need APP_KEY to be set");
+        }
+
+        return this.cipher();
+    }
+
+    // equal ids give equal ciphertexts, so an encrypted id can still be compared and joined
+    protected encryptId(value: any): any
+    {
+        return value == null ? value : this.idCipher().encryptDeterministic(String(value));
+    }
+
+    // a ciphertext is always a string: anything else, such as the plain numeric id of a
+    // joined table that took the id column's place in a SELECT *, is left as it is
+    protected decryptId(value: any): any
+    {
+        return typeof value === 'string' ? this.idCipher().decryptDeterministic(value) : value;
+    }
+
+    // a value compared with an encrypted id has to be encrypted the same way
+    protected idParam(column: string, value: any, operator: string = '='): any
+    {
+        if (!this.encryptedIds.includes(this.camelToSnakeCase(this.ownColumn(column)))) return value;
+
+        if (operator !== '=' && operator !== '!=') {
+            throw new Error(`LakesORM: '${operator}' cannot be used on '${column}', an encrypted id only supports =, != and whereIn`);
+        }
+
+        return this.encryptId(value);
+    }
+
+    // a column can be written with this table's name in front, as a join needs (users.id)
+    private ownColumn(column: string): string
+    {
+        const tableName = (this as { tableName?: string }).tableName;
+
+        return tableName && column.startsWith(`${tableName}.`) ? column.slice(tableName.length + 1) : column;
+    }
+
+    protected newId(): string
+    {
+        return randomUUID();
+    }
+
+    // the database cannot generate an encrypted id: rows without one get a UUID
+    protected withIds<R>(rows: R[]): R[]
+    {
+        if (!this.encryptedIds.includes('id')) return rows;
+
+        return rows.map((row: any) => row.id == null ? { ...row, id: this.newId() } : row);
     }
     
     

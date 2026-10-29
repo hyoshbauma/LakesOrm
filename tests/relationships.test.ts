@@ -28,7 +28,7 @@ function related(tableName: string, rows: unknown[]) {
   return { model, calls };
 }
 
-const relation = (model: object): any => ({ targetModel: model, foreignKey: "userId", type: "one" });
+const relation = (model: object): any => ({ targetModel: model, foreignKey: "userId", type: "many" });
 
 test("without parents the related table is not queried", async () => {
   const { builder, statements } = parent([]);
@@ -84,6 +84,16 @@ test("a relation with a tableKey is loaded and attached by that key", async () =
     { id: 1, code: "A", orders: [{ id: 10, userCode: "A" }, { id: 12, userCode: "A" }] },
     { id: 2, code: "B", orders: [{ id: 11, userCode: "B" }] },
   ]);
+});
+
+test("a relation of type one gets its first matching row", async () => {
+  const { builder } = parent([{ id: 1 }, { id: 2 }]);
+  const profiles = related("profiles", [{ id: 30, userId: 1 }, { id: 31, userId: 1 }]);
+
+  const rows = await builder.withOnly({ targetModel: profiles.model, foreignKey: "userId", type: "one" } as any).get();
+
+  expect(rows[0]).toEqual({ id: 1, profiles: { id: 30, userId: 1 } });
+  expect(rows[1].profiles).toBeUndefined();
 });
 
 test("without withOnly() the id does not have to be selected", async () => {
