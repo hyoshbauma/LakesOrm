@@ -20,6 +20,7 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
   private conditions: string[] = [];
   private queries: BuiltQuery[] = [];
   private tablesRelations: string[] = [];
+  private relationshipType: string[] = [];
   private foreignKeys: string[] = [];
   private tableKeys: string[] = [];
 
@@ -61,6 +62,10 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
 
     // push the foreign key
     this.tableKeys.push(table.tableKey ?? 'id');
+
+    // push the relationship type (one , one to may)
+    this.relationshipType.push(table.type);
+
      
     // sql BuiltQuery for this 
     let sql : BuiltQuery = 
@@ -306,7 +311,21 @@ export class QueryWithBuilder<T extends object, S extends object = DatabaseSchem
           let element = responseOne[index];
 
           // check all child that belong to the parent
-          element[this.tablesRelations[0]] = responseTwo.filter((item) => element[this.tableKeys[0]] == item[this.foreignKeys[0]]);
+          const result = responseTwo.filter((item) => element[this.tableKeys[0]] == item[this.foreignKeys[0]]);
+
+          // check if relationship is one to one
+          if(this.relationshipType[0].toLocaleLowerCase() == 'one')
+          {
+            // get only the first element
+            element[this.tablesRelations[0]] = result[0];
+            
+          }else{
+
+            // get only the first element
+            element[this.tablesRelations[0]] = result;
+          }
+
+          
           // add the parent in the list
           data.push(element);
           

@@ -102,7 +102,7 @@ Before runing any commands, please add this to your
 // Then add the dev command to your existing package.json.
 {
   "scripts": {
-    "dev": "lakes": "bun run ./src/database/lakes/ctl.ts"
+    "lakes": "bun run ./src/database/lakes/ctl.ts"
     }
 }
 ```
@@ -552,5 +552,38 @@ console.log(usersOrder[0]);
       userId: 1,
     }
   ],
+}
+```
+
+Example of Copy Id from another table and Insert
+
+```typescript
+
+const insertSelect = await  orderTable.insertSelectQuery()
+            .setSourceTable('user')
+            .mapColumn('userId', 'id')
+            .value(
+                {
+                    quanty: 2,
+                    price: 1900,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                },
+            )
+            .where('telephone', '=', '24398321432141')
+            .save();
+
+consol.log(insertSelect)
+
+// Result of the Insert Select Consol Log
+// result from logs
+{
+  id: 4,
+  quanty: 2,
+  price: 1900,
+  total: 3800,
+  createdAt: 2026-10-24T11:56:42.253Z,
+  updatedAt: 2026-10-24T11:56:42.253Z,
+  userId: 1,
 }
 ```
