@@ -473,6 +473,8 @@ Example of relationship
 
 // src/database/lakes/tables/user.ts
 
+import type { belongsTo } from "@blm/lakeorm";
+
 /*
 * User Table 
 */
