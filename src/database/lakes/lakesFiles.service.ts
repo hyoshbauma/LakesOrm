@@ -256,7 +256,8 @@ export interface belongsTo<T extends object = DatabaseSchema> {
             await this.migrationTemplateService.createFile(tableSchema);
             
         } catch (error) {
-            
+            // the CLI reports the failure and exits with code 1
+            throw error;
         }
 
     }
@@ -280,7 +281,8 @@ export interface belongsTo<T extends object = DatabaseSchema> {
             await this.migrationTemplateService.deleteFile(tableSchema!); 
             
         } catch (error) {
-            console.log(error);
+            // the CLI reports the failure and exits with code 1
+            throw error;
         } 
     }
 
