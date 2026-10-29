@@ -1,6 +1,6 @@
 import { Injectable, Singleton } from "../../../../container";
 import type { AbstractTableSchema } from "../abstracts/tables";
-import { CreateBuilder, DeleteQueryBuilder, InsertBuilder, UpdateBuilder, UpsertQueryBuilder } from "../builder/query-mutations";
+import { CreateBuilder, DeleteQueryBuilder, InsertBuilder, InsertSelectBuilder, UpdateBuilder, UpdateSelectBuilder, UpsertQueryBuilder } from "../builder/query-mutations";
 import { QueryBuilder } from "../builder/query-builder";
 import { JoinableQueryBuilder } from "../builder/query-joins";
 import { QueryWithBuilder } from "../builder/query-relationship";
@@ -67,7 +67,7 @@ import type { WhereCondition } from "../interfaces/structure";
     *  Select from table with belongs tables
     **/
     fromWithBuilder(): QueryWithBuilder<T> {
-      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns).withEncryptedIds(this.encryptedIds);
+      return new QueryWithBuilder<T>(this.tableName, this.encryptedColumns);
     }
     
     /**
@@ -103,6 +103,20 @@ import type { WhereCondition } from "../interfaces/structure";
     **/
     deleteQuery(): DeleteQueryBuilder<T> {
       return new DeleteQueryBuilder<T>(this.tableName).withEncryptedIds(this.encryptedIds);
+    }
+
+    /**
+    *  update select in to the table
+    **/
+    updateSelectQuery(): UpdateSelectBuilder {
+      return new UpdateSelectBuilder(this.tableName, this.encryptedColumns);
+    }
+
+    /**
+    *  insert select in to the table
+    **/
+    insertSelectQuery(): InsertSelectBuilder<T> {
+      return new InsertSelectBuilder(this.tableName, this.encryptedColumns);
     }
 
     // Wrapped find method that returns rich instances

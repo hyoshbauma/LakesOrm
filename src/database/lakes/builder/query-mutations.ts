@@ -1,6 +1,7 @@
-import type { BuiltQuery, WhereCondition } from "../interfaces/structure";
+import { DatabaseSchema } from "../interfaces/schema";
+import type { BuiltQuery, UpdateJoinParams, UpdateSet, WhereCondition } from "../interfaces/structure";
 import type { CamelizeKeys } from "../types/type-case";
-import type { ColumnNames, ValueOperator } from "../types/type-db";
+import type { ColumnNames, ColumnType, Operator, ValueOperator } from "../types/type-db";
 import { Database } from "./database";
 
 
@@ -396,6 +397,276 @@ export class DeleteQueryBuilder<T> extends Database {
     return result.rowCount ?? 0; // Return number of affected rows
   }
 }
+
+
+
+
+export class UpdateSelectBuilder extends Database {
+    
+  private query: UpdateJoinParams | null = null;
+
+  private tableName: string;
+
+  constructor(table: string, encryptedColumns :string[]) {
+    super();
+    this.tableName = table;
+    this.encryptedColumns = encryptedColumns.map( columnKey => this.camelToSnakeCase(columnKey));
+
+    // start a query
+    this.query = {
+        updates: {},
+        join: {
+            targetTable: this.tableName,
+            sourceTable: '', // Must be set later
+            onCondition: '', // Must be set later
+            sourceField: '', // Must be set later
+          }
+    };
+  }
+
+  /**
+  * Initializes the builder for an UPDATE operation.
+  * param tableName The primary table to be updated (e.g., 'users').
+  */
+  // public update(): this {
+    
+  //   return this;
+  // }
+
+    /**
+     * Specifies the source table and the join criteria.
+     */
+    public joinFrom(
+        sourceTable: string,
+        onCondition: string,
+        sourceField: string
+    ): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.join.sourceTable = sourceTable;
+        this.query.join.onCondition = onCondition;
+        this.query.join.sourceField = sourceField;
+        return this;
+    }
+
+    /**
+     * Defines which columns and values should be updated in the target table.
+     */
+    public set(updates: UpdateSet): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.updates = updates;
+        return this;
+    }
+
+    /**
+     * Adds a standard WHERE clause (optional).
+     */
+    public where(condition: string): this {
+        if (!this.query) throw new Error("Must call .update() first.");
+        this.query.where = condition;
+        return this;
+    }
+
+    // wheres<K extends keyof T & string>(
+    //   column: K,
+    //   operator: ValueOperator,
+    //   value: T[K]
+    // ): this {
+    //   this.conditions.push({ column, operator, value });
+    //   return this;
+    // }
+
+    /**
+     * Constructs the final SQL query and returns the parameters.
+     */
+    public build(): BuiltQuery {
+        if (!this.query) {
+            throw new Error("Query configuration is incomplete. Call .update() first.");
+        }
+
+        const { updates, join } = this.query;
+
+        // 1. Construct the SET clause using the join logic
+        const setClauses: string[] = [];
+        
+        // Example: SET column1 = source.column2, column3 = source.column4
+        for (const targetCol in updates) {
+            const sourceValue = `${join.sourceTable}.${join.sourceField}`;
+            setClauses.push(`${targetCol} = ${sourceValue}`);
+        }
+
+        const setSql = setClauses.join(', ');
+
+        // 2. Construct the full UPDATE query
+        const sql = `UPDATE ${join.targetTable} SET ${setSql} WHERE 1=1`; // Start with WHERE 1=1 for cleaner joins
+
+        // 3. Collect parameters (for safe binding)
+        const params: any[] = [];
+        
+        // In a real implementation, we would use placeholders ($1, $2, etc.)
+        // Here we just collect the actual values for demonstration.
+        for (const key in updates) {
+            params.push(updates[key]);
+        }
+
+        // Note: For a production query builder, you would generate parameterized SQL
+        // like: UPDATE users SET status = audit_logs.status WHERE users.id = audit_logs.user_id
+        
+        return { sql, params };
+    }
+
+  // Execute the built query (mock execution step)
+  async save(): Promise<number> {
+    
+    const query =  this.build();
+
+    const data : any = await this.execute(query);
+
+    return 1; // Return number of affected rows
+  }
+}
+
+
+
+export class InsertSelectBuilder<TargetTable extends object> extends Database  {
+  private tableName: string;
+  private sourceTable: string | null = null ;
+  private columnsMapped: { target: string; source: string }[] = [];
+  private whereConditions: WhereCondition[] = [];
+  private data: Partial<TargetTable> = {};
+  private columns : string [] = [];
+  private params: unknown[] = [];
+
+  constructor(table: string, encryptedColumns :string[]) {
+    super();
+    this.tableName = table;
+    this.encryptedColumns = encryptedColumns.map( columnKey => this.camelToSnakeCase(columnKey));
+  }
+
+  /**
+   * set other values of target table column
+   */
+  setSourceTable(sourceTable : (keyof DatabaseSchema)):this{
+    this.sourceTable = sourceTable;
+    return this;
+  }
+
+  /**
+   * Maps a target table column to a source table column
+   */
+  public mapColumn<T extends string, S extends string>(
+    targetColumn: T,
+    sourceColumn: S
+  ): this {
+    if (!this.sourceTable) {
+            throw new Error("Query configuration is incomplete. Call .setSourceTable() first.");
+        }
+    this.columnsMapped.push({ target: targetColumn, source: sourceColumn });
+    return this;
+  }
+
+  // Set multiple values at once
+  value(data: Partial<TargetTable>): this {
+    if (!this.sourceTable) {
+            throw new Error("Query configuration is incomplete. Call .setSourceTable() first.");
+        }
+    data =this.convertKeysToSnakeCase(data);
+    this.data = { ...this.data, ...data };
+    return this;
+  }
+
+  /**
+   * Adds a basic raw WHERE condition to filter the source IDs
+   */
+  public where(
+    column: string,
+    operator: Operator,
+    value?: unknown
+  ): this {
+    this.whereConditions.push({ column, operator, value });
+    if (operator !== 'IS NULL' && operator !== 'IS NOT NULL') {
+      this.params.push(value);
+    }
+    return this;
+  }
+
+  
+
+  /**
+   * Compiles the configuration into a raw SQL query string
+   */
+  public build(): BuiltQuery {
+    if (this.columnsMapped.length === 0) {
+      throw new Error("At least one column mapping must be specified.");
+    }
+
+    const parts: string[] = [];
+
+    const targetCols = this.columnsMapped.map((c) => `"${c.target}"`);
+    const sourceCols = this.columnsMapped.map((c) => `"${c.source}"`).join(", ");
+
+
+    const columns = Object.keys(this.data);
+    let values = Object.values(this.data);
+    const placeholders = columns.map((_, i) => `$${i + 1}`);
+
+    this.columns.push(...targetCols);
+    this.columns.push(...columns);
+
+    const sourceTable = this.camelToSnakeCase(this.sourceTable ?? '') + 's';
+
+    parts.push(`INSERT INTO "${this.tableName}" (${this.camelToSnakeCase(this.columns.join(', '))}) SELECT ${sourceCols}, ${placeholders.join(', ')} FROM "${sourceTable}"`);
+
+    // WHERE clause
+    if (this.whereConditions.length > 0) {
+      const conditions = this.whereConditions.map((c, i) => {
+
+        // refactor column name in snake-case 
+        c.column = this.camelToSnakeCase(c.column);
+
+        if (c.operator === 'IS NULL' || c.operator === 'IS NOT NULL') {
+          return `${c.column} ${c.operator}`;
+        }
+
+        return `${c.column} ${c.operator} $${i + 1 + placeholders.length}`;
+      });
+
+      parts.push(` WHERE ${sourceTable}.${conditions.join(' AND ')}`);
+    }
+
+    // add the where parms
+    values.push(...this.params.filter(p => p !== undefined)); 
+
+    return {
+      sql: parts.join('') + ' RETURNING *', 
+      params: values };
+  }
+
+  // Execute the built query (mock execution step)
+  // async save(): Promise<number> {
+    
+  //   const query =  this.build();
+
+  //   const data : any = await this.execute(query);
+
+  //   return 1; // Return number of affected rows
+  // }
+
+  // save the table data on the database
+  async save<T>(): Promise<CamelizeKeys<T| null>>{
+    
+    const query =  this.build();
+
+    const data : any = await this.executeOne(query);
+
+    if(data == null)
+    {
+      return null;
+    }
+
+    return this.camelizeKeys(data);
+  }
+}
+
 
 
 

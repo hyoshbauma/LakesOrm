@@ -12,7 +12,7 @@ export function Singleton<T extends { new (...args: any[]): {} }>(constructor: T
   let instance: T | null = null;
 
   // Return a new class that wraps the original
-  return class extends constructor {
+  const Wrapped = class extends constructor {
     constructor(...args: any[]) {
       // Return existing instance if available
       if (instance) {
@@ -22,6 +22,11 @@ export function Singleton<T extends { new (...args: any[]): {} }>(constructor: T
       instance = this as any;
     }
   };
+
+  // keep the original name: the container registers classes by name
+  Object.defineProperty(Wrapped, 'name', { value: constructor.name });
+
+  return Wrapped;
 }
 
 

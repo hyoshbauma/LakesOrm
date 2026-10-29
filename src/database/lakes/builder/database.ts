@@ -13,8 +13,10 @@ export class Database {
 
     // Prostgres
     protected lakesOrm: LakesOrm;
-    // Prostgres
-    protected postgres?: Pool ;
+    // Prostgres: the shared pool, looked up on every use unless a pool was assigned
+    private postgresPool?: Pool;
+    protected get postgres(): Pool | undefined { return this.postgresPool ?? this.lakesOrm?.db ?? undefined; }
+    protected set postgres(pool: Pool | undefined) { this.postgresPool = pool; }
     // Mysql
     protected mysql?: Pool;
     // database driver
@@ -26,22 +28,34 @@ export class Database {
 
     constructor() {
         // database driver
-        this.driver = process.env.DB_CONNECTION!;
+        this.driver = process.env.DB_CONNECTION ?? 'pgsql';
+        // the database this builder talks to
+        this.connectionString = process.env.DATABASE_URL;
         // database connection
         this.lakesOrm = this.connectionDb(this.driver);
 
         this.appKey = "base64:P1G6tpneoQAlRZbZgdZ4on/8zMM+33JAtFT9VJn1Qc=";
     }
 
+    // one pool per DATABASE_URL, shared by every builder that uses it
+    private static pools = new Map<string | undefined, Pool>();
+
+    private connectionString?: string;
+
     /**
      *  Prostgres connection
      **/
     private postgresConnection() : Pool
     {
-        const connectionString: string = process.env.DATABASE_URL!;
-        this.postgres = new Pool({ connectionString });
+        let pool = Database.pools.get(this.connectionString);
 
-        return this.postgres;
+        // create the pool once, or again after it was ended
+        if (!pool || pool.ending) {
+            pool = new Pool({ connectionString: this.connectionString });
+            Database.pools.set(this.connectionString, pool);
+        }
+
+        return pool;
     }
 
     /**
@@ -71,12 +85,16 @@ export class Database {
      **/
     private connectionDb(driver : string): LakesOrm
     {
+        // the pool is looked up on every use, so a builder made before
+        // MigrationService.close() or before DATABASE_URL was set still works
+        const database = this;
+
         // connection to postgres
         if(driver == 'pgsql'){
             
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -84,7 +102,7 @@ export class Database {
         if(driver == 'mysql'){
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -100,77 +118,58 @@ export class Database {
 
     // Execute a query and return typed results
     protected async execute<T>(query: BuiltQuery): Promise<T[]> {
-        const result: QueryResult = await this.lakesOrm.db.query(
+        const result: QueryResult | QueryResult[] = await this.lakesOrm.db.query(
         query.sql,
         query.params
         );
 
-        try {
-            return result.rows;
+        // a multi-statement query (CREATE TABLE + CREATE INDEX) resolves to one result per statement
+        const last = Array.isArray(result) ? result[result.length - 1] : result;
 
-        } catch (error : any) {
-            console.log("Error : "+error.message);
-        }
-
-        return [];
+        return last?.rows ?? [];
     }
 
     // Execute and return single result
     protected async executeOne<T>(query: BuiltQuery): Promise<T | null> {
-        
-        try {
 
-            const results = await this.execute<T>(query);
-            return results[0] || null;
-
-        } catch (error:any) {
-
-            console.log("Error : "+ error.message);
-            
-            return null;
-        }
+        const results = await this.execute<T>(query);
+        return results[0] || null;
     }
 
     protected camelToSnakeCase(str: string): string {
-            return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+        return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
     }
 
     protected camelToSnakeCaseList(str: string[]): string[] {
 
-            let listString : string[] = [];
+        let listString : string[] = [];
 
-            for (let index = 0; index < str.length; index++) {
+        for (let index = 0; index < str.length; index++) {
 
-                const element:string = str[index]!;
+            const element:string = str[index]!;
 
-                listString.push(this.camelToSnakeCase(element));
+            listString.push(this.camelToSnakeCase(element));
                 
-            }
-            return listString;
+        }
+        return listString;
     }
 
     protected convertKeysToSnakeCase(obj: Record<string, any>): any {
-            //
-            const result: Record<string, any> = {};
+        //
+        const result: Record<string, any> = {};
 
-            for (const key of Object.keys(obj)) {
-                const snakeKey = this.camelToSnakeCase(key);
+        for (const key of Object.keys(obj)) {
+            const snakeKey = this.camelToSnakeCase(key);
 
-                if(this.encryptedIds.includes(snakeKey))
-                {
-                    result[snakeKey] = this.encryptId(obj[key]);
-                    continue;
-                }
-
-                if(this.encryptedColumns.includes(snakeKey))
-                {
-                    result[snakeKey] = this.dbEcncryption(obj[key]);
-                    continue;
-                }
-                
-                result[snakeKey] = obj[key];
+            if(this.encryptedColumns.includes(key))
+            {
+                result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
+                continue;
             }
-            return result;
+                
+            result[snakeKey] = obj[key];
+        }
+        return result;
     }
 
 
@@ -312,73 +311,6 @@ export class Database {
         if (value == null) return value;
 
         return this.cipher().encrypt(value);
-    }
-
-    // id columns stored encrypted and still searchable: the id, and foreign keys that point at one
-    protected encryptedIds: string[] = [];
-
-    public withEncryptedIds(columns: string[]): this
-    {
-        this.encryptedIds = columns.map((column) => this.camelToSnakeCase(column));
-
-        return this;
-    }
-
-    // the built-in key is public: an id encrypted with it would not be protected.
-    // Ids use the validated APP_KEY only, never the built-in key that old encrypted columns fall back to
-    private idCipher(): CryptoAes256C
-    {
-        if (!process.env.APP_KEY) {
-            throw new Error("LakesORM: encrypted ids need APP_KEY to be set");
-        }
-
-        return this.cipher();
-    }
-
-    // equal ids give equal ciphertexts, so an encrypted id can still be compared and joined
-    protected encryptId(value: any): any
-    {
-        return value == null ? value : this.idCipher().encryptDeterministic(String(value));
-    }
-
-    // a ciphertext is always a string: anything else, such as the plain numeric id of a
-    // joined table that took the id column's place in a SELECT *, is left as it is
-    protected decryptId(value: any): any
-    {
-        return typeof value === 'string' ? this.idCipher().decryptDeterministic(value) : value;
-    }
-
-    // a value compared with an encrypted id has to be encrypted the same way
-    protected idParam(column: string, value: any, operator: string = '='): any
-    {
-        if (!this.encryptedIds.includes(this.camelToSnakeCase(this.ownColumn(column)))) return value;
-
-        if (operator !== '=' && operator !== '!=') {
-            throw new Error(`LakesORM: '${operator}' cannot be used on '${column}', an encrypted id only supports =, != and whereIn`);
-        }
-
-        return this.encryptId(value);
-    }
-
-    // a column can be written with this table's name in front, as a join needs (users.id)
-    private ownColumn(column: string): string
-    {
-        const tableName = (this as { tableName?: string }).tableName;
-
-        return tableName && column.startsWith(`${tableName}.`) ? column.slice(tableName.length + 1) : column;
-    }
-
-    protected newId(): string
-    {
-        return randomUUID();
-    }
-
-    // the database cannot generate an encrypted id: rows without one get a UUID
-    protected withIds<R>(rows: R[]): R[]
-    {
-        if (!this.encryptedIds.includes('id')) return rows;
-
-        return rows.map((row: any) => row.id == null ? { ...row, id: this.newId() } : row);
     }
     
     
