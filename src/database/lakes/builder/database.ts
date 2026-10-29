@@ -12,8 +12,10 @@ export class Database {
 
     // Prostgres
     protected lakesOrm: LakesOrm;
-    // Prostgres
-    protected postgres?: Pool ;
+    // Prostgres: the shared pool, looked up on every use unless a pool was assigned
+    private postgresPool?: Pool;
+    protected get postgres(): Pool | undefined { return this.postgresPool ?? this.lakesOrm?.db ?? undefined; }
+    protected set postgres(pool: Pool | undefined) { this.postgresPool = pool; }
     // Mysql
     protected mysql?: Pool;
     // database driver
@@ -25,22 +27,34 @@ export class Database {
 
     constructor() {
         // database driver
-        this.driver = process.env.DB_CONNECTION!;
+        this.driver = process.env.DB_CONNECTION ?? 'pgsql';
+        // the database this builder talks to
+        this.connectionString = process.env.DATABASE_URL;
         // database connection
         this.lakesOrm = this.connectionDb(this.driver);
 
         this.appKey = "base64:P1G6tpneoQAlRZbZgdZ4on/8zMM+33JAtFT9VJn1Qc=";
     }
 
+    // one pool per DATABASE_URL, shared by every builder that uses it
+    private static pools = new Map<string | undefined, Pool>();
+
+    private connectionString?: string;
+
     /**
      *  Prostgres connection
      **/
     private postgresConnection() : Pool
     {
-        const connectionString: string = process.env.DATABASE_URL!;
-        this.postgres = new Pool({ connectionString });
+        let pool = Database.pools.get(this.connectionString);
 
-        return this.postgres;
+        // create the pool once, or again after it was ended
+        if (!pool || pool.ending) {
+            pool = new Pool({ connectionString: this.connectionString });
+            Database.pools.set(this.connectionString, pool);
+        }
+
+        return pool;
     }
 
     /**
@@ -70,12 +84,16 @@ export class Database {
      **/
     private connectionDb(driver : string): LakesOrm
     {
+        // the pool is looked up on every use, so a builder made before
+        // MigrationService.close() or before DATABASE_URL was set still works
+        const database = this;
+
         // connection to postgres
         if(driver == 'pgsql'){
             
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -83,7 +101,7 @@ export class Database {
         if(driver == 'mysql'){
             return {
                 driver: driver,
-                db: this.postgresConnection()
+                get db() { return database.postgresConnection(); }
             }
         }
 
@@ -131,39 +149,39 @@ export class Database {
     }
 
     protected camelToSnakeCase(str: string): string {
-            return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+        return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
     }
 
     protected camelToSnakeCaseList(str: string[]): string[] {
 
-            let listString : string[] = [];
+        let listString : string[] = [];
 
-            for (let index = 0; index < str.length; index++) {
+        for (let index = 0; index < str.length; index++) {
 
-                const element:string = str[index]!;
+            const element:string = str[index]!;
 
-                listString.push(this.camelToSnakeCase(element));
+            listString.push(this.camelToSnakeCase(element));
                 
-            }
-            return listString;
+        }
+        return listString;
     }
 
     protected convertKeysToSnakeCase(obj: Record<string, any>): any {
-            //
-            const result: Record<string, any> = {};
+        //
+        const result: Record<string, any> = {};
 
-            for (const key of Object.keys(obj)) {
-                const snakeKey = this.camelToSnakeCase(key);
+        for (const key of Object.keys(obj)) {
+            const snakeKey = this.camelToSnakeCase(key);
 
-                if(this.encryptedColumns.includes(key))
-                {
-                    result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
-                    continue;
-                }
-                
-                result[snakeKey] = obj[key];
+            if(this.encryptedColumns.includes(key))
+            {
+                result[snakeKey] = new CryptoAes256C(this.appKey).encrypt(obj[key]);
+                continue;
             }
-            return result;
+                
+            result[snakeKey] = obj[key];
+        }
+        return result;
     }
 
 
@@ -186,7 +204,7 @@ export class Database {
                     if(this.encryptedColumns.includes(key)){
                         return [
                             key.replace(/_([a-z])/g, (_, char) => char.toUpperCase()),
-                            this.camelizeKeys(new CryptoAes256C(this.appKey).decrypt(value)),
+                            this.camelizeKeys(this.decryptValue(value)),
                         ];
                         
                     }
@@ -219,9 +237,84 @@ export class Database {
         return rows;
     }
 
+    // one cipher per key: deriving the key is slow, so it is done once
+    private static ciphers = new Map<string, CryptoAes256C>();
+    private static warnings = new Set<string>();
+
+    protected cipher(): CryptoAes256C
+    {
+        const appKey = process.env.APP_KEY;
+
+        if (!appKey) Database.warnOnce("LakesORM: APP_KEY is not set, encrypted columns use the built-in key, which is public");
+
+        return this.cipherFor(appKey || undefined);
+    }
+
+    // APP_KEY is the key itself: 32 random bytes, base64-encoded (openssl rand -base64 32).
+    // Without it, the built-in key keeps its original derivation, so values encrypted with it stay readable
+    private cipherFor(appKey?: string): CryptoAes256C
+    {
+        const key = appKey ?? this.appKey;
+
+        let cipher = Database.ciphers.get(key);
+
+        if (!cipher) {
+            cipher = new CryptoAes256C(appKey ? Database.appKeyBytes(appKey) : key);
+            Database.ciphers.set(key, cipher);
+        }
+
+        return cipher;
+    }
+
+    private static appKeyBytes(appKey: string): Buffer
+    {
+        const encoded = appKey.replace(/^base64:/, '');
+        const bytes = Buffer.from(encoded, 'base64');
+
+        // Buffer.from() skips characters that are not base64, so the encoding is checked by re-encoding
+        if (bytes.length !== 32 || bytes.toString('base64') !== encoded) {
+            throw new Error("LakesORM: APP_KEY must be 32 random bytes, base64-encoded (openssl rand -base64 32)");
+        }
+
+        return bytes;
+    }
+
+    // a value stored before APP_KEY was set is encrypted with the built-in key: it is still read,
+    // and is encrypted with APP_KEY the next time it is written
+    protected decryptValue(value: any): any
+    {
+        if (value == null || value === '') return value;
+
+        try {
+            return this.cipher().decrypt(value);
+        } catch (error) {
+            if (!process.env.APP_KEY) throw error;
+
+            let plain: string;
+            try {
+                plain = this.cipherFor(undefined).decrypt(value);
+            } catch {
+                throw error;
+            }
+
+            Database.warnOnce("LakesORM: a value encrypted with the built-in key was read; it is encrypted with APP_KEY when it is written again");
+            return plain;
+        }
+    }
+
+    private static warnOnce(message: string): void
+    {
+        if (Database.warnings.has(message)) return;
+
+        Database.warnings.add(message);
+        console.warn(message);
+    }
+
     protected dbEcncryption(value: string): string
     {
-        return new CryptoAes256C(this.appKey).encrypt(value);   
+        if (value == null) return value;
+
+        return this.cipher().encrypt(value);
     }
     
     

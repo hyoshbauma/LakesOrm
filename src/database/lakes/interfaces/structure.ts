@@ -75,3 +75,24 @@ export interface DateTimeLakes {
     minutes: string;
     seconds: string;
 }
+
+
+/** Defines the structure of the data being updated in the target table. */
+export interface UpdateSet {
+    [column: string]: any; // e.g., { status: 'active', last_updated: new Date() }
+}
+
+/** Defines the relationship between the target and source tables. */
+export interface JoinCondition {
+    targetTable: string; // e.g., 'users'
+    sourceTable: string; // e.g., 'audit_logs'
+    onCondition: string; // The column used to link them (e.g., 'user_id')
+    sourceField: string; // The column whose value will be used for the update (e.g., 'status')
+}
+
+/** Defines the parameters passed to the final SQL query. */
+export interface UpdateJoinParams {
+    updates: UpdateSet;
+    join: JoinCondition;
+    where?: string; // Optional secondary WHERE clause
+}
